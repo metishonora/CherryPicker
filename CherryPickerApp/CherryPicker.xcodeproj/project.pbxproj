@@ -1,0 +1,436 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 71;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000000000000000000001 /* CherryPickerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* CherryPickerApp.swift */; };
+		A10000000000000000000002 /* Persistence/TransactionRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* Persistence/TransactionRecord.swift */; };
+		A10000000000000000000003 /* Persistence/PersistenceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* Persistence/PersistenceController.swift */; };
+		A10000000000000000000004 /* Persistence/TransactionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* Persistence/TransactionStore.swift */; };
+		A10000000000000000000005 /* Intents/SaveCardMessageIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* Intents/SaveCardMessageIntent.swift */; };
+		A10000000000000000000006 /* Features/Inbox/InboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* Features/Inbox/InboxView.swift */; };
+		A10000000000000000000007 /* CherryPickerCore in Frameworks */ = {isa = PBXBuildFile; productRef = A70000000000000000000001 /* CherryPickerCore */; };
+		B10000000000000000000001 /* TransactionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000001 /* TransactionStoreTests.swift */; };
+		B10000000000000000000002 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B20000000000000000000002 /* XCTest.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B52000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A50000000000000000000002 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A50000000000000000000001;
+			remoteInfo = CherryPicker;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		A20000000000000000000001 /* CherryPickerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CherryPickerApp.swift; sourceTree = "<group>"; };
+		A20000000000000000000002 /* Persistence/TransactionRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence/TransactionRecord.swift; sourceTree = "<group>"; };
+		A20000000000000000000003 /* Persistence/PersistenceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence/PersistenceController.swift; sourceTree = "<group>"; };
+		A20000000000000000000004 /* Persistence/TransactionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence/TransactionStore.swift; sourceTree = "<group>"; };
+		A20000000000000000000005 /* Intents/SaveCardMessageIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Intents/SaveCardMessageIntent.swift; sourceTree = "<group>"; };
+		A20000000000000000000006 /* Features/Inbox/InboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Inbox/InboxView.swift; sourceTree = "<group>"; };
+		A30000000000000000000001 /* CherryPicker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CherryPicker.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B20000000000000000000001 /* TransactionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionStoreTests.swift; sourceTree = "<group>"; };
+		B20000000000000000000002 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
+		B30000000000000000000001 /* CherryPickerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CherryPickerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A40000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000007 /* CherryPickerCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B40000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000000000000000000002 /* XCTest.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A80000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				A80000000000000000000003 /* CherryPicker */,
+				B80000000000000000000001 /* CherryPickerTests */,
+				A80000000000000000000002 /* Products */,
+				D24B976B3020E9C6004115E1 /* Recovered References */,
+			);
+			sourceTree = "<group>";
+		};
+		A80000000000000000000002 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A30000000000000000000001 /* CherryPicker.app */,
+				B30000000000000000000001 /* CherryPickerTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A80000000000000000000003 /* CherryPicker */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000001 /* CherryPickerApp.swift */,
+				A20000000000000000000002 /* Persistence/TransactionRecord.swift */,
+				A20000000000000000000003 /* Persistence/PersistenceController.swift */,
+				A20000000000000000000004 /* Persistence/TransactionStore.swift */,
+				A20000000000000000000005 /* Intents/SaveCardMessageIntent.swift */,
+				A20000000000000000000006 /* Features/Inbox/InboxView.swift */,
+			);
+			path = CherryPicker;
+			sourceTree = "<group>";
+		};
+		B80000000000000000000001 /* CherryPickerTests */ = {
+			isa = PBXGroup;
+			children = (
+				B20000000000000000000001 /* TransactionStoreTests.swift */,
+			);
+			path = CherryPickerTests;
+			sourceTree = "<group>";
+		};
+		D24B976B3020E9C6004115E1 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				B20000000000000000000002 /* XCTest.framework */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A50000000000000000000001 /* CherryPicker */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A60000000000000000000002 /* Build configuration list for PBXNativeTarget "CherryPicker" */;
+			buildPhases = (
+				A40000000000000000000002 /* Sources */,
+				A40000000000000000000001 /* Frameworks */,
+				A40000000000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CherryPicker;
+			packageProductDependencies = (
+				A70000000000000000000001 /* CherryPickerCore */,
+			);
+			productName = CherryPicker;
+			productReference = A30000000000000000000001 /* CherryPicker.app */;
+			productType = "com.apple.product-type.application";
+		};
+		B50000000000000000000001 /* CherryPickerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B60000000000000000000003 /* Build configuration list for PBXNativeTarget "CherryPickerTests" */;
+			buildPhases = (
+				B40000000000000000000002 /* Sources */,
+				B40000000000000000000001 /* Frameworks */,
+				B40000000000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B51000000000000000000001 /* PBXTargetDependency */,
+			);
+			name = CherryPickerTests;
+			productName = CherryPickerTests;
+			productReference = B30000000000000000000001 /* CherryPickerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A50000000000000000000002 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					A50000000000000000000001 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					B50000000000000000000001 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = A50000000000000000000001;
+					};
+				};
+			};
+			buildConfigurationList = A60000000000000000000001 /* Build configuration list for PBXProject "CherryPicker" */;
+			compatibilityVersion = "Xcode 16.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+				ko,
+			);
+			mainGroup = A80000000000000000000001;
+			packageReferences = (
+				A90000000000000000000001 /* XCLocalSwiftPackageReference ".." */,
+			);
+			productRefGroup = A80000000000000000000002 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A50000000000000000000001 /* CherryPicker */,
+				B50000000000000000000001 /* CherryPickerTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A40000000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B40000000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A40000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000001 /* CherryPickerApp.swift in Sources */,
+				A10000000000000000000002 /* Persistence/TransactionRecord.swift in Sources */,
+				A10000000000000000000003 /* Persistence/PersistenceController.swift in Sources */,
+				A10000000000000000000004 /* Persistence/TransactionStore.swift in Sources */,
+				A10000000000000000000005 /* Intents/SaveCardMessageIntent.swift in Sources */,
+				A10000000000000000000006 /* Features/Inbox/InboxView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B40000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000000000000000000001 /* TransactionStoreTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B51000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A50000000000000000000001 /* CherryPicker */;
+			targetProxy = B52000000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		A61000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		A61000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		A62000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QLUKJ629VT;
+				ENABLE_TESTABILITY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_CFBundleDisplayName = CherryPicker;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.cherrypicker.local;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A62000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QLUKJ629VT;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_CFBundleDisplayName = CherryPicker;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.cherrypicker.local;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		B62000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.cherrypicker.local.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CherryPicker.app/CherryPicker";
+			};
+			name = Debug;
+		};
+		B62000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.cherrypicker.local.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CherryPicker.app/CherryPicker";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A60000000000000000000001 /* Build configuration list for PBXProject "CherryPicker" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A61000000000000000000001 /* Debug */,
+				A61000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A60000000000000000000002 /* Build configuration list for PBXNativeTarget "CherryPicker" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A62000000000000000000001 /* Debug */,
+				A62000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B60000000000000000000003 /* Build configuration list for PBXNativeTarget "CherryPickerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B62000000000000000000001 /* Debug */,
+				B62000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		A90000000000000000000001 /* XCLocalSwiftPackageReference ".." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ..;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A70000000000000000000001 /* CherryPickerCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A90000000000000000000001 /* XCLocalSwiftPackageReference ".." */;
+			productName = CherryPickerCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = A50000000000000000000002 /* Project object */;
+}
