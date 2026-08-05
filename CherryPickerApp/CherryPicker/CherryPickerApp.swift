@@ -32,10 +32,43 @@ struct CherryPickerApp: App {
             if let persistenceErrorMessage {
                 PersistenceUnavailableView(details: persistenceErrorMessage)
             } else {
-                InboxView()
+                RootView()
             }
         }
         .modelContainer(modelContainer)
+    }
+}
+
+private struct RootView: View {
+    @Environment(\.modelContext) private var modelContext
+    @State private var seedingErrorMessage: String?
+
+    var body: some View {
+        TabView {
+            Tab("거래", systemImage: "tray.full") {
+                InboxView()
+            }
+
+            Tab("설정", systemImage: "creditcard") {
+                CardSettingsView()
+            }
+        }
+        .task {
+            do {
+                let store = CardStore(modelContainer: modelContext.container)
+                _ = try await store.seedDefaultCardIfNeeded()
+            } catch {
+                seedingErrorMessage = error.localizedDescription
+            }
+        }
+        .alert("기본 카드 설정을 만들 수 없습니다", isPresented: Binding(
+            get: { seedingErrorMessage != nil },
+            set: { if !$0 { seedingErrorMessage = nil } }
+        )) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text(seedingErrorMessage ?? "알 수 없는 오류가 발생했습니다.")
+        }
     }
 }
 

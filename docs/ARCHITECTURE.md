@@ -319,6 +319,14 @@ public protocol PerformancePeriodResolving: Sendable {
     func period(containing date: Date, rule: PerformancePeriodRule) throws -> DateInterval
 }
 
+#2에서 확정한 MVP 정책은 다음과 같다.
+
+- 기본 카드는 `MG 더나은 체크카드` / `MG` / `4775`이며 월 실적 목표는 300,000원이다.
+- 실적 목표 없음은 0이 아니라 선택 값의 부재로 표현한다.
+- 실적 기간은 `Asia/Seoul` 기준 달력 월이며 시작 포함·끝 미포함이다.
+- 연도 없는 새 거래는 수신 현지일보다 미래가 아닌 가장 가까운 현지 날짜로 해석한다. 같은 현지일은 시각 차이와 무관하게 수신 연도를 사용한다.
+- 기존 거래는 정확하고 유일한 `issuerCode + lastFour` 일치가 확인될 때만 카드 관계를 채운다.
+
 public protocol TransactionDateResolving: Sendable {
     func resolve(_ partial: ParsedLocalDate, receivedAt: Date) throws -> ResolvedTransactionDate
 }

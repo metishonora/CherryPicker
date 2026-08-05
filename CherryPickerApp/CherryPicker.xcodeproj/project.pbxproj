@@ -14,8 +14,13 @@
 		A10000000000000000000005 /* Intents/SaveCardMessageIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* Intents/SaveCardMessageIntent.swift */; };
 		A10000000000000000000006 /* Features/Inbox/InboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* Features/Inbox/InboxView.swift */; };
 		A10000000000000000000007 /* CherryPickerCore in Frameworks */ = {isa = PBXBuildFile; productRef = A70000000000000000000001 /* CherryPickerCore */; };
+		A10000000000000000000008 /* Persistence/CardStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* Persistence/CardStore.swift */; };
+		A10000000000000000000009 /* Features/CardSettings/CardSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* Features/CardSettings/CardSettingsView.swift */; };
 		B10000000000000000000001 /* TransactionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000001 /* TransactionStoreTests.swift */; };
 		B10000000000000000000002 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B20000000000000000000002 /* XCTest.framework */; };
+		C10000000000000000000001 /* PersistenceMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000001 /* PersistenceMigrationTests.swift */; };
+		C10000000000000000000002 /* CardStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000002 /* CardStoreTests.swift */; };
+		C10000000000000000000003 /* CardSettingsDraftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000003 /* CardSettingsDraftTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -35,9 +40,14 @@
 		A20000000000000000000004 /* Persistence/TransactionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence/TransactionStore.swift; sourceTree = "<group>"; };
 		A20000000000000000000005 /* Intents/SaveCardMessageIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Intents/SaveCardMessageIntent.swift; sourceTree = "<group>"; };
 		A20000000000000000000006 /* Features/Inbox/InboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Inbox/InboxView.swift; sourceTree = "<group>"; };
+		A20000000000000000000008 /* Persistence/CardStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence/CardStore.swift; sourceTree = "<group>"; };
+		A20000000000000000000009 /* Features/CardSettings/CardSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/CardSettings/CardSettingsView.swift; sourceTree = "<group>"; };
 		A30000000000000000000001 /* CherryPicker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CherryPicker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B20000000000000000000001 /* TransactionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionStoreTests.swift; sourceTree = "<group>"; };
 		B20000000000000000000002 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
+		C20000000000000000000001 /* PersistenceMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceMigrationTests.swift; sourceTree = "<group>"; };
+		C20000000000000000000002 /* CardStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardStoreTests.swift; sourceTree = "<group>"; };
+		C20000000000000000000003 /* CardSettingsDraftTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardSettingsDraftTests.swift; sourceTree = "<group>"; };
 		B30000000000000000000001 /* CherryPickerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CherryPickerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -89,6 +99,8 @@
 				A20000000000000000000004 /* Persistence/TransactionStore.swift */,
 				A20000000000000000000005 /* Intents/SaveCardMessageIntent.swift */,
 				A20000000000000000000006 /* Features/Inbox/InboxView.swift */,
+				A20000000000000000000008 /* Persistence/CardStore.swift */,
+				A20000000000000000000009 /* Features/CardSettings/CardSettingsView.swift */,
 			);
 			path = CherryPicker;
 			sourceTree = "<group>";
@@ -97,6 +109,9 @@
 			isa = PBXGroup;
 			children = (
 				B20000000000000000000001 /* TransactionStoreTests.swift */,
+				C20000000000000000000001 /* PersistenceMigrationTests.swift */,
+				C20000000000000000000002 /* CardStoreTests.swift */,
+				C20000000000000000000003 /* CardSettingsDraftTests.swift */,
 			);
 			path = CherryPickerTests;
 			sourceTree = "<group>";
@@ -220,6 +235,8 @@
 				A10000000000000000000004 /* Persistence/TransactionStore.swift in Sources */,
 				A10000000000000000000005 /* Intents/SaveCardMessageIntent.swift in Sources */,
 				A10000000000000000000006 /* Features/Inbox/InboxView.swift in Sources */,
+				A10000000000000000000008 /* Persistence/CardStore.swift in Sources */,
+				A10000000000000000000009 /* Features/CardSettings/CardSettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -228,6 +245,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				B10000000000000000000001 /* TransactionStoreTests.swift in Sources */,
+				C10000000000000000000001 /* PersistenceMigrationTests.swift in Sources */,
+				C10000000000000000000002 /* CardStoreTests.swift in Sources */,
+				C10000000000000000000003 /* CardSettingsDraftTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

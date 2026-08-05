@@ -55,6 +55,9 @@ final class TransactionStoreTests: XCTestCase {
         XCTAssertEqual(record.merchant, "씨유(CU)삼성백암점")
         XCTAssertEqual(record.accountBalance, 426_905)
         XCTAssertNotNil(record.parserVersion)
+        XCTAssertEqual(record.resolvedYear, 2026)
+        XCTAssertEqual(record.dateResolutionSourceRaw, "inferred")
+        XCTAssertEqual(record.card?.lastFour, "4775")
     }
 
     func testDuplicateWithinTenMinutesReturnsExistingIDAndKeepsOneRecord() async throws {
@@ -206,6 +209,125 @@ final class TransactionStoreTests: XCTestCase {
         XCTAssertEqual(record.merchant, "씨유(CU)삼성백암점")
         XCTAssertEqual(record.accountBalance, 426_905)
         XCTAssertNil(record.parseFailureReason)
+    }
+
+    func testUpdateStoresUserOverridesWithoutChangingParsedSnapshot() async throws {
+        let (container, store) = try makeStore()
+        let receivedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let outcome = try await store.save(rawMessage: approvalMessage, receivedAt: receivedAt)
+
+        try await store.update(
+            id: outcome.id,
+            patch: TransactionUserPatch(
+                kindRaw: "cancellation",
+                amount: 9_900,
+                merchant: "사용자 수정 가맹점",
+                year: 2026,
+                month: 8,
+                day: 2,
+                hour: nil,
+                minute: nil,
+                reviewStatusRaw: ReviewStatus.reviewed.rawValue,
+                performanceDecisionRaw: PerformanceDecision.excluded.rawValue,
+                benefitDecisionRaw: BenefitDecision.received.rawValue,
+                benefitAmount: 500,
+                userMemo: "확인 완료"
+            )
+        )
+
+        let record = try XCTUnwrap(try records(in: container).first)
+        XCTAssertEqual(record.parsedKindRaw, "approval")
+        XCTAssertEqual(record.parsedAmount, 2_500)
+        XCTAssertEqual(record.parsedMerchant, "씨유(CU)삼성백암점")
+        XCTAssertEqual(record.kindRaw, "cancellation")
+        XCTAssertEqual(record.amount, 9_900)
+        XCTAssertEqual(record.merchant, "사용자 수정 가맹점")
+        XCTAssertEqual(record.dateOverrideYear, 2026)
+        XCTAssertEqual(record.dateOverrideMonth, 8)
+        XCTAssertEqual(record.dateOverrideDay, 2)
+        XCTAssertEqual(record.dateOverridePrecisionRaw, "day")
+        XCTAssertEqual(record.reviewStatusRaw, ReviewStatus.reviewed.rawValue)
+        XCTAssertEqual(record.performanceDecisionRaw, PerformanceDecision.excluded.rawValue)
+        XCTAssertEqual(record.benefitDecisionRaw, BenefitDecision.received.rawValue)
+        XCTAssertEqual(record.benefitAmount, 500)
+        XCTAssertEqual(record.benefitUnitCode, "KRW")
+        XCTAssertEqual(record.userMemo, "확인 완료")
+        XCTAssertEqual(record.hasUserEdits, true)
+    }
+
+    func testUpdateRejectsInvalidTimeComponentsInsteadOfNormalizingThem() async throws {
+        let (_, store) = try makeStore()
+        let outcome = try await store.save(
+            rawMessage: approvalMessage,
+            receivedAt: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+
+        do {
+            try await store.update(
+                id: outcome.id,
+                patch: TransactionUserPatch(
+                    kindRaw: "approval",
+                    amount: 2_500,
+                    merchant: "가맹점",
+                    year: 2026,
+                    month: 8,
+                    day: 2,
+                    hour: 12,
+                    minute: 60,
+                    reviewStatusRaw: ReviewStatus.reviewed.rawValue,
+                    performanceDecisionRaw: PerformanceDecision.included.rawValue,
+                    benefitDecisionRaw: BenefitDecision.undecided.rawValue,
+                    benefitAmount: nil,
+                    userMemo: ""
+                )
+            )
+            XCTFail("Invalid time components should be rejected")
+        } catch {
+            XCTAssertEqual(error as? TransactionStoreError, .invalidDate)
+        }
+    }
+
+    func testDeleteRemovesOnlyRequestedTransaction() async throws {
+        let (container, store) = try makeStore()
+        let first = try await store.save(
+            rawMessage: approvalMessage,
+            receivedAt: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+        let second = try await store.save(
+            rawMessage: approvalMessage,
+            receivedAt: Date(timeIntervalSince1970: 1_800_001_000)
+        )
+
+        try await store.delete(id: first.id)
+
+        XCTAssertEqual(try records(in: container).map(\.id), [second.id])
+    }
+
+    func testDeletingApprovalNullifiesCancellationLinkWithoutDeletingCancellation() async throws {
+        let (container, store) = try makeStore()
+        let context = ModelContext(container)
+        let approval = TransactionRecord(
+            receivedAt: .now,
+            originalMessage: "approval",
+            normalizedMessageHash: "approval-hash",
+            kindRaw: "approval"
+        )
+        let cancellation = TransactionRecord(
+            receivedAt: .now,
+            originalMessage: "cancellation",
+            normalizedMessageHash: "cancellation-hash",
+            kindRaw: "cancellation"
+        )
+        cancellation.linkedApproval = approval
+        context.insert(approval)
+        context.insert(cancellation)
+        try context.save()
+
+        try await store.delete(id: approval.id)
+
+        let remaining = try XCTUnwrap(try records(in: container).first)
+        XCTAssertEqual(remaining.id, cancellation.id)
+        XCTAssertNil(remaining.linkedApproval)
     }
 }
 

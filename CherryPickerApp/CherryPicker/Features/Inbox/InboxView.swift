@@ -210,11 +210,14 @@ private struct TransactionDetailView: View {
                 }
             }
         }
+        .environment(\.timeZone, TimeZone(identifier: "Asia/Seoul")!)
         .navigationTitle("거래 검토")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("저장", action: save)
+                Button("저장") {
+                    Task { await save() }
+                }
             }
         }
         .confirmationDialog(
@@ -222,7 +225,9 @@ private struct TransactionDetailView: View {
             isPresented: $showingDeleteConfirmation,
             titleVisibility: .visible
         ) {
-            Button("삭제", role: .destructive, action: delete)
+            Button("삭제", role: .destructive) {
+                Task { await delete() }
+            }
         } message: {
             Text("삭제한 거래는 복구할 수 없습니다.")
         }
@@ -236,7 +241,8 @@ private struct TransactionDetailView: View {
         }
     }
 
-    private func save() {
+    @MainActor
+    private func save() async {
         let amountDigits = amountText.filter(\.isNumber)
         guard let amount = Int(amountDigits), amount > 0 else {
             errorMessage = "금액을 1원 이상의 숫자로 입력해주세요."
@@ -249,39 +255,47 @@ private struct TransactionDetailView: View {
             return
         }
 
-        let components = Calendar.current.dateComponents(
-            [.month, .day, .hour, .minute],
+        let components = Self.seoulCalendar.dateComponents(
+            [.year, .month, .day, .hour, .minute],
             from: transactionDate
         )
-        record.kindRaw = kindRaw
-        record.amount = amount
-        record.merchant = trimmedMerchant
-        record.month = components.month
-        record.day = components.day
-        record.hour = includesTime ? components.hour : nil
-        record.minute = includesTime ? components.minute : nil
-        record.reviewStatusRaw = reviewStatusRaw
-        record.performanceDecisionRaw = performanceDecisionRaw
-        record.benefitDecisionRaw = benefitDecisionRaw
-        record.benefitAmount = benefitDecisionRaw == BenefitDecision.received.rawValue
-            ? Int(benefitAmountText.filter(\.isNumber))
-            : nil
-        record.userMemo = userMemo.trimmingCharacters(in: .whitespacesAndNewlines)
-        record.hasUserEdits = true
-        record.updatedAt = .now
+        guard let year = components.year, let month = components.month, let day = components.day else {
+            errorMessage = "거래일을 확인해주세요."
+            return
+        }
+
+        let patch = TransactionUserPatch(
+            kindRaw: kindRaw,
+            amount: amount,
+            merchant: trimmedMerchant,
+            year: year,
+            month: month,
+            day: day,
+            hour: includesTime ? components.hour : nil,
+            minute: includesTime ? components.minute : nil,
+            reviewStatusRaw: reviewStatusRaw,
+            performanceDecisionRaw: performanceDecisionRaw,
+            benefitDecisionRaw: benefitDecisionRaw,
+            benefitAmount: benefitDecisionRaw == BenefitDecision.received.rawValue
+                ? Int(benefitAmountText.filter(\.isNumber))
+                : nil,
+            userMemo: userMemo
+        )
 
         do {
-            try modelContext.save()
+            let store = TransactionStore(modelContainer: modelContext.container)
+            try await store.update(id: record.id, patch: patch)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    private func delete() {
-        modelContext.delete(record)
+    @MainActor
+    private func delete() async {
         do {
-            try modelContext.save()
+            let store = TransactionStore(modelContainer: modelContext.container)
+            try await store.delete(id: record.id)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
@@ -289,12 +303,23 @@ private struct TransactionDetailView: View {
     }
 
     private static func date(from record: TransactionRecord) -> Date {
-        var components = Calendar.current.dateComponents([.year], from: record.receivedAt)
+        var components = DateComponents()
+        components.calendar = seoulCalendar
+        components.timeZone = seoulCalendar.timeZone
+        components.year = record.hasDateOverride
+            ? record.dateOverrideYear
+            : (record.resolvedYear ?? seoulCalendar.component(.year, from: record.receivedAt))
         components.month = record.month
         components.day = record.day
         components.hour = record.hour ?? 12
         components.minute = record.minute ?? 0
-        return Calendar.current.date(from: components) ?? record.receivedAt
+        return seoulCalendar.date(from: components) ?? record.receivedAt
+    }
+
+    private static var seoulCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Seoul")!
+        return calendar
     }
 
     private var statusLabel: String {

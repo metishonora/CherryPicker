@@ -49,6 +49,7 @@ xcodebuild test \
 - 실제 문자 원문, 이름, 잔액이나 기기 저장소를 사용하지 않는다.
 - 로컬 개발 서버만 외부에 노출하고 저장소·디버거 포트를 노출하지 않는다.
 - Tailscale Serve를 사용할 때는 tailnet 내부 접근으로 제한하고 검토가 끝나면 route를 비활성화한다.
+- Serve가 비활성화된 tailnet에서는 서버를 Mac의 Tailscale IP에만 바인딩하는 임시 HTTP 경로를 사용할 수 있다. `0.0.0.0`에는 바인딩하지 않는다.
 - 승인 결과에는 확인한 화면·상태와 프로토타입이라 확인하지 못한 네이티브 항목을 함께 기록한다.
 
 예시 흐름:
@@ -61,6 +62,15 @@ xcodebuild test \
 ```
 
 Tailscale은 네트워크 연결만 제공한다. 현재 SwiftUI 앱 자체는 웹 서버가 아니므로 포트를 여는 것만으로 브라우저에서 앱을 조작할 수 없다.
+
+Serve를 사용할 수 없을 때의 임시 경로:
+
+```sh
+tailscale ip -4
+npm run dev -- --hostname <tailscale-ip> --port 3001
+```
+
+공유 주소는 `http://<tailscale-ip>:3001/`이다. 이 경로는 HTTPS가 아니고 실행 중인 프로세스에 의존하므로 fixture 외 데이터는 다루지 않으며, 검토 후 서버를 종료한다.
 
 ## 4. 내부 TestFlight
 
