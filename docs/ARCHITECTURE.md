@@ -430,6 +430,8 @@ Apple SwiftData는 [VersionedSchema](https://developer.apple.com/documentation/s
 
 ### 10.2 테스트 경계
 
+반복 실행 절차와 원격 UI·TestFlight 운영 방법은 [`TESTING.md`](TESTING.md)를 따른다.
+
 | 경계 | 테스트 대상 |
 |---|---|
 | CherryPickerCore 단위 테스트 | 파서, effective value 병합, 날짜·기간 resolver, 후보 정렬, 집계와 취소 정책 |
