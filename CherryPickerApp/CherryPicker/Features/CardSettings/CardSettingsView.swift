@@ -1,8 +1,15 @@
 import SwiftData
 import SwiftUI
 
+enum CardSettingsField: Hashable {
+    case displayName
+    case issuerCode
+    case lastFour
+    case performanceTarget
+}
+
 enum CardSettingsDraftError: Error, Equatable {
-    case invalidTarget
+    case invalidFields(Set<CardSettingsField>)
 }
 
 struct CardSettingsDraft: Equatable {
@@ -24,22 +31,42 @@ struct CardSettingsDraft: Equatable {
         performanceTargetText = card.performanceTargetAmount.map(String.init) ?? ""
     }
 
-    func makeCommand() throws -> CardSaveCommand {
-        let target: Int?
-        if performanceTargetEnabled {
-            let normalized = performanceTargetText
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .replacingOccurrences(of: ",", with: "")
-            guard !normalized.isEmpty,
-                  normalized.utf8.allSatisfy({ (48...57).contains($0) }),
-                  let parsed = Int(normalized),
-                  parsed > 0 else {
-                throw CardSettingsDraftError.invalidTarget
-            }
-            target = parsed
-        } else {
-            target = nil
+    var invalidFields: Set<CardSettingsField> {
+        var fields: Set<CardSettingsField> = []
+
+        if displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            fields.insert(.displayName)
         }
+        if issuerCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            fields.insert(.issuerCode)
+        }
+
+        let normalizedLastFour = lastFour.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalizedLastFour.count != 4
+            || !normalizedLastFour.utf8.allSatisfy({ (48...57).contains($0) }) {
+            fields.insert(.lastFour)
+        }
+
+        if performanceTargetEnabled {
+            let normalizedTarget = normalizedPerformanceTarget
+            let targetIsValid = !normalizedTarget.isEmpty
+                && normalizedTarget.utf8.allSatisfy({ (48...57).contains($0) })
+                && (Int(normalizedTarget).map { $0 > 0 } ?? false)
+            if !targetIsValid {
+                fields.insert(.performanceTarget)
+            }
+        }
+
+        return fields
+    }
+
+    func makeCommand() throws -> CardSaveCommand {
+        let fields = invalidFields
+        guard fields.isEmpty else {
+            throw CardSettingsDraftError.invalidFields(fields)
+        }
+
+        let target = performanceTargetEnabled ? Int(normalizedPerformanceTarget) : nil
 
         return CardSaveCommand(
             id: id,
@@ -48,6 +75,12 @@ struct CardSettingsDraft: Equatable {
             lastFour: lastFour,
             performanceTargetAmount: target
         )
+    }
+
+    private var normalizedPerformanceTarget: String {
+        performanceTargetText
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: ",", with: "")
     }
 }
 
@@ -58,6 +91,11 @@ struct CardSettingsView: View {
     @State private var isLoading = true
     @State private var isSaving = false
     @State private var notice: CardSettingsNotice?
+    @State private var highlightedFields: Set<CardSettingsField> = []
+    @State private var highlightToken = UUID()
+    @State private var isSaveMessageVisible = false
+    @State private var saveMessageToken = UUID()
+    @FocusState private var focusedField: CardSettingsField?
 
     var body: some View {
         NavigationStack {
@@ -67,12 +105,48 @@ struct CardSettingsView: View {
                 } else {
                     Form {
                         Section("카드 정보") {
-                            TextField("표시 이름", text: $draft.displayName)
-                            TextField("카드사", text: $draft.issuerCode)
-                                .textInputAutocapitalization(.characters)
-                                .autocorrectionDisabled()
-                            TextField("끝 네 자리", text: $draft.lastFour)
-                                .keyboardType(.numberPad)
+                            LabeledContent {
+                                TextField("필수", text: $draft.displayName)
+                                    .multilineTextAlignment(.trailing)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(fieldColor(.displayName))
+                                    .focused($focusedField, equals: .displayName)
+                                    .cardSettingsInputBorder(
+                                        isHighlighted: highlightedFields.contains(.displayName)
+                                    )
+                            } label: {
+                                Text("표시 이름")
+                                    .foregroundStyle(labelColor(.displayName))
+                            }
+                            LabeledContent {
+                                TextField("필수", text: $draft.issuerCode)
+                                    .textInputAutocapitalization(.characters)
+                                    .autocorrectionDisabled()
+                                    .multilineTextAlignment(.trailing)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(fieldColor(.issuerCode))
+                                    .focused($focusedField, equals: .issuerCode)
+                                    .cardSettingsInputBorder(
+                                        isHighlighted: highlightedFields.contains(.issuerCode)
+                                    )
+                            } label: {
+                                Text("카드사")
+                                    .foregroundStyle(labelColor(.issuerCode))
+                            }
+                            LabeledContent {
+                                TextField("필수", text: $draft.lastFour)
+                                    .keyboardType(.numberPad)
+                                    .multilineTextAlignment(.trailing)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(fieldColor(.lastFour))
+                                    .focused($focusedField, equals: .lastFour)
+                                    .cardSettingsInputBorder(
+                                        isHighlighted: highlightedFields.contains(.lastFour)
+                                    )
+                            } label: {
+                                Text("끝 네 자리")
+                                    .foregroundStyle(labelColor(.lastFour))
+                            }
                         }
 
                         Section {
@@ -82,9 +156,14 @@ struct CardSettingsView: View {
                                     TextField("기준 금액", text: $draft.performanceTargetText)
                                         .keyboardType(.numberPad)
                                         .multilineTextAlignment(.trailing)
+                                        .foregroundStyle(fieldColor(.performanceTarget))
+                                        .focused($focusedField, equals: .performanceTarget)
                                     Text("원")
                                         .foregroundStyle(.secondary)
                                 }
+                                .cardSettingsInputBorder(
+                                    isHighlighted: highlightedFields.contains(.performanceTarget)
+                                )
                             }
                         } header: {
                             Text("카드 공통 실적 기준")
@@ -94,8 +173,11 @@ struct CardSettingsView: View {
 
                         Section("실적 산정 기간") {
                             LabeledContent("기간", value: "매월 1일~말일")
-                            LabeledContent("기준 시간대", value: "대한민국 표준시")
                         }
+                    }
+                    .scrollDismissesKeyboard(.interactively)
+                    .onTapGesture {
+                        focusedField = nil
                     }
                 }
             }
@@ -107,9 +189,27 @@ struct CardSettingsView: View {
                     }
                     .disabled(isLoading || isSaving)
                 }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("완료") {
+                        focusedField = nil
+                    }
+                }
             }
         }
         .task { await load() }
+        .overlay(alignment: .bottom) {
+            if isSaveMessageVisible {
+                Label("저장했습니다", systemImage: "checkmark.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(.regularMaterial, in: Capsule())
+                    .shadow(radius: 4, y: 2)
+                    .padding(.bottom, 20)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
         .alert(item: $notice) { notice in
             Alert(
                 title: Text(notice.title),
@@ -150,27 +250,91 @@ struct CardSettingsView: View {
             let store = CardStore(modelContainer: modelContext.container)
             let saved = try await store.save(command)
             draft = CardSettingsDraft(card: saved)
-            notice = CardSettingsNotice(title: "저장했습니다", message: "카드 설정이 기기에 저장되었습니다.")
+            highlightedFields = []
+            focusedField = nil
+            showSaveMessage()
         } catch {
-            notice = CardSettingsNotice(title: "저장할 수 없습니다", message: message(for: error))
+            isSaveMessageVisible = false
+            highlight(fields(for: error))
         }
     }
 
-    private func message(for error: Error) -> String {
+    private func fields(for error: Error) -> Set<CardSettingsField> {
         switch error {
-        case CardSettingsDraftError.invalidTarget, CardStoreError.targetMustBePositive:
-            return "목표 금액을 1원 이상의 숫자로 입력해주세요."
+        case let CardSettingsDraftError.invalidFields(fields):
+            return fields
+        case CardStoreError.targetMustBePositive:
+            return [.performanceTarget]
         case CardStoreError.displayNameRequired:
-            return "표시 이름을 입력해주세요."
+            return [.displayName]
         case CardStoreError.issuerCodeRequired:
-            return "카드사를 입력해주세요."
+            return [.issuerCode]
         case CardStoreError.invalidLastFour:
-            return "카드 끝 네 자리를 숫자 네 자리로 입력해주세요."
+            return [.lastFour]
         case CardStoreError.duplicateIssuerAndLastFour:
-            return "같은 카드사와 끝 네 자리를 가진 카드가 이미 있습니다."
+            return [.issuerCode, .lastFour]
         default:
-            return error.localizedDescription
+            return []
         }
+    }
+
+    @MainActor
+    private func highlight(_ fields: Set<CardSettingsField>) {
+        guard !fields.isEmpty else { return }
+
+        let token = UUID()
+        highlightToken = token
+        withAnimation(.easeInOut(duration: 0.15)) {
+            highlightedFields = fields
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard highlightToken == token else { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                highlightedFields = []
+            }
+        }
+    }
+
+    private func fieldColor(_ field: CardSettingsField) -> Color {
+        highlightedFields.contains(field) ? .red : .primary
+    }
+
+    private func labelColor(_ field: CardSettingsField) -> Color {
+        highlightedFields.contains(field) ? .red : .secondary
+    }
+
+    @MainActor
+    private func showSaveMessage() {
+        let token = UUID()
+        saveMessageToken = token
+        withAnimation(.easeOut(duration: 0.2)) {
+            isSaveMessageVisible = true
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard saveMessageToken == token else { return }
+            withAnimation(.easeIn(duration: 0.2)) {
+                isSaveMessageVisible = false
+            }
+        }
+    }
+}
+
+private extension View {
+    func cardSettingsInputBorder(isHighlighted: Bool) -> some View {
+        padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(
+                        isHighlighted ? Color.red : Color.clear,
+                        lineWidth: 2
+                    )
+            }
+            .animation(.easeInOut(duration: 0.15), value: isHighlighted)
     }
 }
 
