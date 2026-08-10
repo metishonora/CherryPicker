@@ -1,9 +1,11 @@
 # CherryPicker 아키텍처
 
 - 상태: 승인됨
-- 기준일: 2026-08-05
+- 기준일: 2026-08-11
 - 대상 이슈: [#6 카드·거래·집계 도메인 구조 확정](https://github.com/metishonora/CherryPicker/issues/6)
-- 후속 기능: [#2 카드 설정](https://github.com/metishonora/CherryPicker/issues/2), [#3 승인취소 연결](https://github.com/metishonora/CherryPicker/issues/3), [#4 현황 대시보드](https://github.com/metishonora/CherryPicker/issues/4)
+- 완료된 기반: [#2 카드 설정](https://github.com/metishonora/CherryPicker/issues/2)
+- 후속 기능: [#4 현황 대시보드](https://github.com/metishonora/CherryPicker/issues/4)
+- 대체된 기능: [#3 승인취소 연결](https://github.com/metishonora/CherryPicker/issues/3)은 ADR-0005의 독립 취소 집계 정책으로 대체한다.
 
 ## 1. 목적과 범위
 
@@ -11,15 +13,15 @@
 
 이 문서가 확정하는 내용은 다음과 같다.
 
-- Card, Transaction, 승인–취소 연결의 관계와 불변조건
+- Card, Transaction, 승인취소 집계와 향후 확장용 연결 관계의 불변조건
 - 원문, 파싱 스냅샷, 사용자 수정값의 소유권
-- 날짜 해석, 후보 검색, 집계를 교체 가능한 정책으로 두는 경계
+- 날짜 해석과 집계를 교체 가능한 정책으로 두는 경계
 - App Intent와 앱 UI가 같은 로컬 저장소를 사용하는 방식
 - SwiftData 스키마 버전과 기존 실기기 데이터 마이그레이션 원칙
 - 민감한 원문과 구조화된 진단값의 저장·노출 원칙
 - 도메인, 애플리케이션, 저장소, UI의 테스트 경계
 
-실적 기간의 정확한 기본값, 날짜 추론 허용 범위, 취소 후보 점수, 취소의 기간별 집계 방식과 같은 기능 정책은 각 기능 이슈에서 예제 기반으로 확정한다. 이 문서는 그 정책을 구현할 자리를 정의한다.
+실적 기간의 정확한 기본값과 날짜 추론 허용 범위는 #2에서 확정했다. 취소는 원승인과 연결하지 않고 취소 발생 기간의 음수 실적으로 반영하며 혜택은 자동 조정하지 않는다. 나머지 집계 정책은 #4에서 예제 기반으로 확정한다.
 
 ## 2. 핵심 결정
 
@@ -27,10 +29,10 @@
 |---|---|
 | 식별 | Card와 Transaction은 표시값과 무관한 UUID를 안정적인 식별자로 사용한다. 원문 지문은 수집 중복 판정용이며 거래 식별자가 아니다. |
 | 카드 관계 | 한 Card는 여러 Transaction을 가진다. Transaction의 Card 관계는 파싱 실패와 마이그레이션을 위해 선택적이다. |
-| 승인취소 | 취소는 독립 Transaction이다. 취소는 최대 한 승인과 연결되고, 승인은 여러 취소를 받을 수 있다. 연결은 사용자 명령으로만 생성한다. |
+| 승인취소 | 취소는 독립 Transaction이다. MVP는 원승인을 찾거나 연결하지 않고, 사용자가 `인정`한 취소 금액을 취소 발생 기간의 음수 실적으로 계산한다. 기존 선택적 연결 관계는 향후 확장용으로만 남긴다. |
 | 값 소유권 | 원문은 불변 수집 사실, 파싱 결과는 교체 가능한 스냅샷, 사용자 수정값은 별도 override다. 유효값은 `사용자 override ?? 파싱값`이다. |
 | 날짜 | 원문에서 얻은 부분 날짜와 해석된 날짜를 구분한다. 날짜 해석 알고리즘은 버전이 있는 정책이며 사용자 확정 날짜를 덮어쓰지 않는다. |
-| 집계 | 대시보드 값과 취소 후보 점수는 저장하지 않는다. Sendable 스냅샷을 입력으로 받는 순수 도메인 서비스가 계산한다. |
+| 집계 | 대시보드 값은 저장하지 않는다. Sendable 스냅샷을 입력으로 받는 순수 도메인 서비스가 계산하며, 음수 실적을 0으로 보정하지 않고 혜택은 취소 금액으로 자동 조정하지 않는다. |
 | 저장소 | SwiftData는 앱 전용 어댑터다. 모든 쓰기는 `@ModelActor` 기반 명령 저장소를 거치고, 영속 모델을 actor 경계 밖으로 전달하지 않는다. |
 | 프로세스 | 앱 UI와 App Intent는 같은 스키마, 마이그레이션 계획, 저장 URL을 만드는 Composition Root를 공유한다. 각 실행 환경은 자기 ModelContainer를 가질 수 있다. |
 | 마이그레이션 | 현재 실기기 스키마를 V1로 고정하고 이후 모든 변경에 VersionedSchema와 SchemaMigrationPlan을 사용한다. 실패 시 저장소를 삭제하거나 빈 저장소로 대체하지 않는다. |
@@ -54,7 +56,6 @@ flowchart LR
 
     Core --> Parser[문자 파서]
     Core --> DatePolicy[날짜·기간 정책]
-    Core --> Matcher[취소 후보 계산]
     Core --> Calculator[현황 계산]
 ```
 
@@ -203,18 +204,23 @@ ResolvedTransactionDate
 - 날짜만 있는 거래의 목록 정렬은 `receivedAt`을 사용한다.
 - 집계 기간은 시작 포함·끝 미포함 `DateInterval` 의미를 사용한다. 구체적인 기간 생성 규칙은 #2에서 결정한다.
 
-### 4.5 승인–취소 연결
+### 4.5 승인취소 처리와 향후 연결 확장
 
-승인취소 관계는 Transaction의 선택적 자기 참조다.
+취소는 원승인을 특정하지 않아도 완전한 Transaction으로 저장하고 조회한다. MVP의 집계는 연결 관계를 입력으로 사용하지 않는다.
+
+- 사용자가 실적 `인정`으로 확정한 승인은 금액을 더하고 취소는 금액을 뺀다.
+- 취소는 취소 거래가 속한 실적 기간에 반영한다.
+- 기간 실적이 음수여도 0으로 보정하지 않으며 남은 목표 금액 계산에 그대로 사용한다.
+- 취소 금액은 혜택 합계를 자동으로 차감하거나 증가시키지 않는다.
+- 원승인 후보 검색, 연결·변경·해제 UI와 연결 기반 집계는 MVP에서 제외한다.
+
+V2에 이미 포함된 승인취소 관계는 향후 확장을 위한 선택적 자기 참조로 유지한다.
 
 - 취소의 `linkedApproval`은 0 또는 1개다.
 - 승인의 역관계 `linkedCancellations`는 0개 이상이다.
-- 취소는 연결되지 않아도 완전한 거래로 저장되고 조회된다.
-- 후보는 `CancellationMatcher`가 계산하며 저장하지 않는다.
-- 후보 제안은 연결을 만들지 않는다. `linkCancellation` 사용자 명령만 관계를 변경한다.
+- MVP에서는 관계를 생성하거나 자동 추론하지 않는다.
+- 향후 연결 기능을 도입하더라도 사용자 명령만 관계를 변경할 수 있다.
 - 승인 삭제 시 취소 관계를 해제하고 취소 거래는 보존한다.
-
-부분취소 허용, 초과취소 처리, 후보 점수, 기간 간 취소 집계는 #3과 #4의 기능 정책이다. 현재 관계는 그 정책들을 표현할 수 있다.
 
 ### 4.6 혜택
 
@@ -283,7 +289,7 @@ CardSnapshot + 선택한 기간
   → SwiftUI 표시
 ```
 
-Summary는 저장하지 않는다. 카드 설정, 판정, 거래 날짜, 취소 연결이 바뀌면 같은 입력으로 다시 계산한다.
+Summary는 저장하지 않는다. 카드 설정, 판정 또는 거래 날짜가 바뀌면 같은 입력으로 다시 계산한다.
 
 ## 6. 명시적 인터페이스
 
@@ -302,8 +308,6 @@ public protocol TransactionCommandRepository: Sendable {
     func update(id: TransactionID, patch: TransactionUserPatch) async throws -> TransactionSnapshot
     func reparse(id: TransactionID) async throws -> TransactionSnapshot
     func delete(id: TransactionID) async throws
-    func linkCancellation(_ cancellationID: TransactionID, to approvalID: TransactionID) async throws
-    func unlinkCancellation(_ cancellationID: TransactionID) async throws
 }
 
 public protocol TransactionQueryRepository: Sendable {
@@ -329,18 +333,6 @@ public protocol PerformancePeriodResolving: Sendable {
 
 public protocol TransactionDateResolving: Sendable {
     func resolve(_ partial: ParsedLocalDate, receivedAt: Date) throws -> ResolvedTransactionDate
-}
-```
-
-#3이 사용하는 도메인 정책:
-
-```swift
-public protocol CancellationCandidateFinding: Sendable {
-    func candidates(
-        for cancellation: TransactionSnapshot,
-        among approvals: [TransactionSnapshot],
-        policy: CancellationCandidatePolicy
-    ) -> [CancellationCandidate]
 }
 ```
 
@@ -370,13 +362,16 @@ public protocol DashboardCalculating: Sendable {
 5. 사용자 override가 있는 필드는 재파싱 결과보다 우선한다.
 6. Transaction의 Card 관계가 없어도 저장·수정·조회·삭제할 수 있다.
 7. 연결 원본은 승인, 연결 주체는 취소여야 하며 자기 자신을 연결할 수 없다.
-8. 후보 계산은 관계를 생성하지 않는다. 사용자 연결 명령만 관계를 저장한다.
+8. MVP는 연결 관계를 생성하거나 집계 입력으로 사용하지 않는다. 향후 연결 기능도 사용자 명령만 관계를 저장한다.
 9. Card 또는 승인 삭제는 거래를 연쇄 삭제하지 않고 관계를 해제한다.
 10. 혜택 값과 단위는 함께 존재하거나 함께 없어야 한다.
 11. 검토 상태와 실적·혜택 판정은 서로 독립적이다. 집계 포함 정책은 #4가 정의한다.
-12. 파싱·날짜 해석·후보·집계 정책의 버전 변경은 사용자 override를 덮어쓰지 않는다.
-13. 영속 모델 인스턴스는 ModelContext 또는 ModelActor 경계를 넘어 전달하지 않는다.
-14. 대시보드 합계와 후보 점수는 영속화하지 않는다.
+12. 실적 `인정` 승인은 양수, 실적 `인정` 취소는 취소 발생 기간의 음수 기여다.
+13. 기간 실적의 음수는 0으로 보정하지 않고 남은 목표 금액 계산에 그대로 사용한다.
+14. 취소 금액은 혜택 합계를 자동으로 차감하거나 증가시키지 않는다.
+15. 파싱·날짜 해석·집계 정책의 버전 변경은 사용자 override를 덮어쓰지 않는다.
+16. 영속 모델 인스턴스는 ModelContext 또는 ModelActor 경계를 넘어 전달하지 않는다.
+17. 대시보드 합계는 영속화하지 않는다.
 
 ## 8. SwiftData와 동시성
 
@@ -400,7 +395,7 @@ CherryPicker는 다음 경계를 적용한다.
 - **V2**: Card, 사용자 데이터/필드별 override, 부분 날짜 해석 메타데이터, 선택적 Card 관계, 선택적 승인–취소 자기 관계, 혜택 단위를 추가한다.
 - V2 이후 모든 릴리스는 VersionedSchema와 SchemaMigrationPlan에 새 버전을 명시한다.
 
-V1 코드가 아직 Git 기준선에 포함되지 않았으므로, #2 구현의 첫 변경은 현재 모델 선언을 그대로 보존한 V1 스키마와 디스크 저장소 fixture를 만드는 것이다. 모델 변경과 기준선 생성을 한 단계에서 섞지 않는다.
+#2에서 현재 모델 선언을 보존한 V1 스키마와 디스크 저장소 fixture를 먼저 만들고 V2 마이그레이션을 구현했다. V2의 선택적 승인–취소 관계는 제거하지 않으며 MVP에서는 사용하지 않는다.
 
 ### 9.2 V1 → V2 보존 규칙
 
@@ -442,10 +437,10 @@ Apple SwiftData는 [VersionedSchema](https://developer.apple.com/documentation/s
 
 | 경계 | 테스트 대상 |
 |---|---|
-| CherryPickerCore 단위 테스트 | 파서, effective value 병합, 날짜·기간 resolver, 후보 정렬, 집계와 취소 정책 |
-| 애플리케이션 Use Case 테스트 | 명령 검증, 중복 처리, 파싱 실패 보존, 사용자 override 보호, 연결 명령 흐름 |
+| CherryPickerCore 단위 테스트 | 파서, effective value 병합, 날짜·기간 resolver, 집계와 독립 취소 정책 |
+| 애플리케이션 Use Case 테스트 | 명령 검증, 중복 처리, 파싱 실패 보존, 사용자 override 보호 |
 | SwiftData 통합 테스트 | 관계·삭제 규칙, actor 격리, 두 container 접근, V1→V2 migration과 backfill |
-| UI 테스트 | 설정 저장, 거래 수정, 연결·해제, 대시보드 표시의 핵심 사용자 흐름만 검증 |
+| UI 테스트 | 설정 저장, 거래 수정, 대시보드 표시의 핵심 사용자 흐름만 검증 |
 | 실기기 시험 | 잠금·백그라운드 App Intent 저장과 업그레이드 후 기존 데이터 보존 |
 
 도메인 정책 변경은 먼저 순수 입력과 기대 출력으로 실패하는 테스트를 추가한다. 문서·스타일 변경은 이 규칙에서 제외한다.
@@ -456,6 +451,7 @@ Apple SwiftData는 [VersionedSchema](https://developer.apple.com/documentation/s
 - [ADR-0002: 날짜·후보·집계를 파생 정책으로 분리한다](adr/0002-derived-policy-services.md)
 - [ADR-0003: 모든 쓰기를 ModelActor 저장소 경계로 통합한다](adr/0003-modelactor-persistence-boundary.md)
 - [ADR-0004: V1 데이터를 보존하는 버전 스키마와 로컬 민감정보 원칙을 사용한다](adr/0004-versioned-schema-and-sensitive-data.md)
+- [ADR-0005: 취소를 원승인 연결 없이 현재 기간의 음수 실적으로 계산한다](adr/0005-independent-cancellation-performance.md)
 
 ## 12. 후속 이슈가 추가 아키텍처 결정 없이 사용할 수 있는 것
 
@@ -468,16 +464,16 @@ Apple SwiftData는 [VersionedSchema](https://developer.apple.com/documentation/s
 
 ### #3 승인취소 연결
 
-- 취소 0..1 → 승인, 승인 0..N → 취소 관계
-- 후보를 저장하지 않는 CancellationMatcher
-- 사용자 명령만 연결을 생성하는 불변조건
-- 삭제 시 nullify 규칙
+- 원승인 매칭과 연결 기능은 구현하지 않고 이슈를 종료한다.
+- V2의 선택적 연결 관계는 향후 확장용으로 남기며 MVP 집계에는 사용하지 않는다.
+- 취소는 독립 거래로 보존하고 #4에서 취소 발생 기간의 음수 실적으로 계산한다.
 
 ### #4 대시보드
 
 - 유효값이 적용된 TransactionSnapshot
 - 저장하지 않는 DashboardCalculator와 단위별 혜택 결과
-- 기간·취소 계산을 DashboardPolicy로 전달하는 경계
+- 실적 `인정` 승인 금액은 더하고 취소 금액은 취소 발생 기간에서 빼는 정책
+- 음수 실적을 유지해 남은 목표 금액에 반영하고 취소 금액으로 혜택을 자동 조정하지 않는 정책
 - 판정과 검토 상태를 독립 입력으로 제공하는 구조
 
 각 이슈에 기록된 코너 케이스는 기능 정책과 인수 예제로 결정한다. 그 결정 때문에 SwiftData 모델, UI/Intent 경계 또는 마이그레이션 전략을 다시 설계하지 않는다.
