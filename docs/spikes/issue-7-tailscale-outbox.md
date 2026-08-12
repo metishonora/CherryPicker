@@ -135,6 +135,31 @@ CLANG_MODULE_CACHE_PATH=/private/tmp/cherrypicker-clang-cache \
 swift test --disable-sandbox
 ```
 
+### Observed localhost installation gate — 2026-08-12
+
+The release executable was installed for the current user with the Issue #7
+LaunchAgent while Tailscale Serve remained disabled. The following synthetic-
+only checks passed on the test Mac:
+
+- the agent was running and `GET http://127.0.0.1:8765/healthz` returned `ok`;
+- an incorrect identity returned HTTP `401` without a write;
+- one synthetic event returned `accepted` with disposition `stored`;
+- after a forced agent restart, health returned within the one-second
+  measurement resolution;
+- replaying the committed event returned `duplicate` and the canonical
+  transaction count remained one;
+- the install directory was mode `0700`, generated configuration and SQLite
+  files (including WAL/SHM) were mode `0600`, and the executable was `0755`;
+- stdout/stderr contained neither the synthetic message sentinel nor the
+  configured login; and
+- `tailscale serve status --json` remained empty, so no tailnet or public
+  route was enabled by this gate.
+
+This validates the localhost service and post-launch restart behavior, not the
+two-minute recovery target across a full Mac logout/reboot and subsequent user
+login. It also leaves one disposable synthetic transaction in the spike
+database for the later end-to-end replay test.
+
 The localhost server and tests do not by themselves satisfy Gate 1 or Gate 3.
 Tailscale Serve, launchd recovery, and iPhone Shortcuts remain real-device
 validation work.
