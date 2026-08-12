@@ -139,6 +139,9 @@ The localhost server and tests do not by themselves satisfy Gate 1 or Gate 3.
 Tailscale Serve, launchd recovery, and iPhone Shortcuts remain real-device
 validation work.
 
+The in-progress real-device capture, sync, retry, and cleanup recipe is in
+[`issue-7-iphone-shortcuts.md`](issue-7-iphone-shortcuts.md).
+
 ## Go/no-go report
 
 The final report records observed reliability, the privacy boundary, operating
