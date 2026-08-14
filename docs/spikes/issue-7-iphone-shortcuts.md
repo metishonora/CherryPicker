@@ -75,6 +75,31 @@ unlocked-in-Shortcuts and literal unlocked-in-another-app states remain to be
 explicitly verified, so the matrix remains pending and Gate 1 is not
 complete.
 
+## Observed tailnet-only Serve delivery — 2026-08-15
+
+The Mac client posted copies of the two user-approved synthetic Outbox JSON
+files through the tailnet-only Serve route. The first copy returned
+`accepted`/`stored`; its exact replay returned `duplicate` with the same
+transaction ID; the locked-state copy returned `accepted`/`stored`.
+Authenticated HTML omitted `CHERRYPICKER-SELFTEST` while showing
+`Synthetic Merchant` as the parsed merchant.
+
+This was delivery of Mac-side copies, not execution of the iPhone sync
+shortcut. The end-to-end retry gate remains pending.
+
+## Observed iCloud sync shortcut preparation — 2026-08-15
+
+The iCloud shortcut `CherryPicker Outbox 동기화` was created and saved on the
+Mac. Its configured workflow filters only `.json` files, sorts by name
+ascending, POSTs one event at a time, and immediately deletes that exact
+source item only when the first result status is `accepted` or `duplicate`.
+Rejected, missing-result, and error paths do not delete a file.
+
+The first `Get Folder Contents` folder remains intentionally unresolved:
+the Mac cannot bind `On My iPhone/CherryPickerOutbox`. Selecting that folder
+on the iPhone and completing one real-device sync/retry run remain pending.
+This preparation evidence is not an end-to-end iPhone sync result.
+
 ## Outbox sync
 
 Create a second shortcut named `CherryPicker Outbox 동기화`. Configure its

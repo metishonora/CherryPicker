@@ -96,15 +96,17 @@ scope, a user may expose the loopback service with the locally supported
 Tailscale CLI, for example:
 
 ```sh
-tailscale serve --https=443 http://127.0.0.1:8765
+tailscale serve --bg --https=443 http://127.0.0.1:8765
 ```
 
 This is a separate, user-approved network change. It must target
-`127.0.0.1:8765`; do not bind the Swift server to `0.0.0.0`. Record the
-resulting HTTPS address only in private test notes. The install and uninstall
-scripts neither enable nor reset Serve. If the route is no longer needed,
-review it and remove it separately with the current Tailscale CLI (for
-example, `tailscale serve reset`).
+`127.0.0.1:8765`; do not bind the Swift server to `0.0.0.0`. Confirm plain
+Funnel status reports tailnet-only access before testing. Record the resulting
+HTTPS address only in private test notes. The install and uninstall scripts
+neither enable nor reset Serve. If the route is no longer needed, review it
+and remove it separately with the current Tailscale CLI (for example,
+`tailscale serve --https=443 off`). Use `tailscale serve reset` only when
+clearing every Serve route is explicitly intended.
 
 ## Privacy and logs
 

@@ -181,6 +181,39 @@ unlocked-in-Shortcuts and literal unlocked-in-another-app states remain to be
 explicitly verified, so the matrix remains pending and Gate 1 is not
 complete.
 
+### Observed tailnet-only Serve delivery — 2026-08-15
+
+Tailscale Serve was enabled as a background tailnet-only HTTPS route on port
+443 to `http://127.0.0.1:8765` with `--bg`. Plain Funnel status explicitly
+reported tailnet-only access. `/healthz` returned `ok`, and an authenticated
+request to `/` returned HTTP `200` through Serve.
+
+From a Mac client, copies of the two user-approved synthetic iPhone Outbox
+JSON files were posted through that Serve route. The first copy returned
+`accepted`/`stored`; its exact replay returned `duplicate` with the same
+transaction ID; the locked-state copy returned `accepted`/`stored`. Installed
+SQLite totals increased from 1 canonical transaction and 1 receipt to 3 of
+each. Authenticated HTML omitted `CHERRYPICKER-SELFTEST` while showing
+`Synthetic Merchant` as the parsed merchant.
+
+This was Mac-client delivery of copies, not the iPhone sync shortcut or the
+end-to-end retry gate. It does not close the remaining Gate 1 state matrix or
+Gate 3.
+
+### Observed iCloud sync shortcut preparation — 2026-08-15
+
+The iCloud shortcut `CherryPicker Outbox 동기화` was created and saved on the
+Mac. It filters only `.json` files, sorts by name ascending, POSTs one event
+at a time, and immediately deletes that exact source item only when the first
+result status is `accepted` or `duplicate`; rejected, missing-result, and
+error paths do not delete.
+
+The first `Get Folder Contents` folder remains intentionally unresolved
+because the Mac cannot bind `On My iPhone/CherryPickerOutbox`. Selecting that
+folder on the iPhone and completing one real-device sync/retry run remain
+pending, so this is shortcut preparation evidence rather than the iPhone
+sync or end-to-end retry gate.
+
 The localhost server and tests do not by themselves satisfy Gate 1 or Gate 3.
 Tailscale Serve, launchd recovery, and iPhone Shortcuts remain real-device
 validation work.
