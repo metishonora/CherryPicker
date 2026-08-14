@@ -55,7 +55,7 @@ identifier, or transaction.
 
 ## Observed real-device evidence — 2026-08-14
 
-One real iPhone Message automation created a JSON file in
+One real iPhone Message automation created a JSON file at 20:31 in
 `On My iPhone/CherryPickerOutbox`. The file had the valid schema version,
 `eventId`, `capturedAt`, and `originalMessage` fields. Posting that exact file
 through the production HTTP endpoint returned `accepted` with disposition
@@ -63,9 +63,17 @@ through the production HTTP endpoint returned `accepted` with disposition
 transaction ID. Authenticated HTML omitted the full original marker while
 including the safely parsed merchant field.
 
-The lock state for this capture was not formally recorded. The locked,
-unlocked-in-Shortcuts, and unlocked-in-another-app repeat matrix remains
-pending, so this evidence does not complete Gate 1.
+The 20:31 capture occurred while the iPhone was unlocked on the Home Screen
+with Shortcuts not open. Classify it as passed `unlocked/background with
+Shortcuts not visible` evidence. Home Screen is close background evidence, but
+it is not the original gate's literal `unlocked with another app active`
+state. A second synthetic file, with eventId
+`20260814-2120-4146-8654-000000000000` and capturedAt
+`2026-08-14T21:20:14+09:00`, was created after message arrival while the
+iPhone was locked; the locked-state capture passed. The
+unlocked-in-Shortcuts and literal unlocked-in-another-app states remain to be
+explicitly verified, so the matrix remains pending and Gate 1 is not
+complete.
 
 ## Outbox sync
 

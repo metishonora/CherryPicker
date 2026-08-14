@@ -162,14 +162,24 @@ database for the later end-to-end replay test.
 
 ### Observed real-device capture and delivery — 2026-08-14
 
-One real iPhone automation-created JSON file had valid schema, `eventId`,
-`capturedAt`, and `originalMessage` fields. Posting that exact file through
-the production HTTP endpoint returned `accepted`/`stored`; replaying the exact
-file returned `duplicate` with the same transaction ID. Authenticated HTML
-omitted the full original marker while safely including the parsed merchant.
+One real iPhone automation-created JSON file at 20:31 had valid schema,
+`eventId`, `capturedAt`, and `originalMessage` fields. Posting that exact file
+through the production HTTP endpoint returned `accepted`/`stored`; replaying
+the exact file returned `duplicate` with the same transaction ID.
+Authenticated HTML omitted the full original marker while safely including
+the parsed merchant.
 
-The capture's lock state was not formally recorded, so the locked/unlocked
-repeat matrix remains pending. This evidence does not complete Gate 1.
+The 20:31 capture occurred while the iPhone was unlocked on the Home Screen
+with Shortcuts not open. Classify it as passed `unlocked/background with
+Shortcuts not visible` evidence. Home Screen is close background evidence, but
+it is not the original gate's literal `unlocked with another app active`
+state. A second synthetic file, with eventId
+`20260814-2120-4146-8654-000000000000` and capturedAt
+`2026-08-14T21:20:14+09:00`, was created after message arrival while the
+iPhone was locked; the locked-state capture passed. The
+unlocked-in-Shortcuts and literal unlocked-in-another-app states remain to be
+explicitly verified, so the matrix remains pending and Gate 1 is not
+complete.
 
 The localhost server and tests do not by themselves satisfy Gate 1 or Gate 3.
 Tailscale Serve, launchd recovery, and iPhone Shortcuts remain real-device
