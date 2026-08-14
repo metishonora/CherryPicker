@@ -25,9 +25,10 @@ Shortcut Input and performs no network request:
    - `originalMessage`: Text variable `originalMessage`
 
 6. Convert the Dictionary to JSON text, name it `<eventId>.json`, and save it
-   as a new file under `On My iPhone/Shortcuts/CherryPickerOutbox`. Do not ask
-   where to save, do not overwrite an existing file, and do not make a network
-   request.
+   as a new file under `On My iPhone/CherryPickerOutbox`. Create this folder
+   directly under `On My iPhone` when a `Shortcuts` folder is not present. Do
+   not ask where to save, do not overwrite an existing file, and do not make a
+   network request.
 
 The timestamp-derived UUID is an idempotency key, not a secret or a random
 security token. The synthetic test sends one message at a time; two captures
@@ -51,6 +52,20 @@ Verify that exactly one independent JSON file appears with the expected four
 keys while the iPhone is (1) unlocked in Shortcuts, (2) unlocked in another
 app, and (3) locked. The message must contain no real name, balance, account
 identifier, or transaction.
+
+## Observed real-device evidence — 2026-08-14
+
+One real iPhone Message automation created a JSON file in
+`On My iPhone/CherryPickerOutbox`. The file had the valid schema version,
+`eventId`, `capturedAt`, and `originalMessage` fields. Posting that exact file
+through the production HTTP endpoint returned `accepted` with disposition
+`stored`; replaying the exact file returned `duplicate` with the same
+transaction ID. Authenticated HTML omitted the full original marker while
+including the safely parsed merchant field.
+
+The lock state for this capture was not formally recorded. The locked,
+unlocked-in-Shortcuts, and unlocked-in-another-app repeat matrix remains
+pending, so this evidence does not complete Gate 1.
 
 ## Outbox sync
 

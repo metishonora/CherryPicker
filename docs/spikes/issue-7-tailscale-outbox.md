@@ -160,6 +160,17 @@ two-minute recovery target across a full Mac logout/reboot and subsequent user
 login. It also leaves one disposable synthetic transaction in the spike
 database for the later end-to-end replay test.
 
+### Observed real-device capture and delivery — 2026-08-14
+
+One real iPhone automation-created JSON file had valid schema, `eventId`,
+`capturedAt`, and `originalMessage` fields. Posting that exact file through
+the production HTTP endpoint returned `accepted`/`stored`; replaying the exact
+file returned `duplicate` with the same transaction ID. Authenticated HTML
+omitted the full original marker while safely including the parsed merchant.
+
+The capture's lock state was not formally recorded, so the locked/unlocked
+repeat matrix remains pending. This evidence does not complete Gate 1.
+
 The localhost server and tests do not by themselves satisfy Gate 1 or Gate 3.
 Tailscale Serve, launchd recovery, and iPhone Shortcuts remain real-device
 validation work.
