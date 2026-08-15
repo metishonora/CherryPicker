@@ -145,7 +145,7 @@ public struct StoredTransaction: Codable, Equatable, Sendable {
     }
 }
 
-/// Public-safe transaction fields for the authenticated spike report.
+/// Public-safe transaction fields for the authenticated product status page.
 ///
 /// This intentionally has no original message, card suffix, account balance,
 /// parser failure reason, or other raw payload fields.  The HTTP layer should

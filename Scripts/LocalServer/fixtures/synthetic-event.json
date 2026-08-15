@@ -1,0 +1,10 @@
+{
+  "events": [
+    {
+      "schemaVersion": 1,
+      "eventId": "00000000-0000-0000-0000-000000008001",
+      "capturedAt": "2026-08-15T12:34:56+09:00",
+      "originalMessage": "[Web발신]\nMG카드(4775)체크승인\n2,500원\n08/15 12:34\nSynthetic Merchant"
+    }
+  ]
+}

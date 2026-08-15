@@ -38,7 +38,8 @@ flowchart LR
 Sources/CherryPickerCore/          파서와 순수 도메인 정책
 Sources/CherryPickerServer/        HTTP 계약과 SQLite 저장
 Sources/CherryPickerLocalServer/   macOS 실행 파일과 구성
-Scripts/Issue7/                    제품화 전 역사적 운영 스파이크
+Scripts/LocalServer/               제품 설치·제거·fixture 검증
+Scripts/Issue7/                    역사적 #7 스파이크 운영 도구
 ```
 
 네이티브 iOS 앱과 SwiftData는 제품 경계가 아니다. 기존 앱 데이터의 이전도
@@ -69,3 +70,6 @@ Scripts/Issue7/                    제품화 전 역사적 운영 스파이크
 - [ADR-0002: 날짜와 집계를 파생 정책으로 분리](adr/0002-derived-policy-services.md)
 - [ADR-0005: 취소를 독립 음수 실적으로 계산](adr/0005-independent-cancellation-performance.md)
 - [ADR-0006: 로컬 웹 제품으로 전환하고 네이티브 프로토타입을 폐기](adr/0006-local-web-product-transition.md)
+
+운영 경로는 [`LOCAL_SERVER_OPERATIONS.md`](LOCAL_SERVER_OPERATIONS.md)를
+따른다.

@@ -30,12 +30,18 @@ DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer swift test
 실제 LaunchAgent 설치·시작, Tailscale Serve 변경과 제거는 사용자가 승인한
 별도 인수 단계에서만 수행한다.
 
+제품 운영 fixture 검증:
+
+```sh
+Scripts/LocalServer/validate-launch-agent.sh
+```
+
 ## 수동 인수
 
 #8의 최소 수동 흐름:
 
 1. 임시 SQLite 위치로 서버를 시작한다.
-2. 개인정보가 없는 합성 이벤트 한 건을 보낸다.
+2. `Scripts/LocalServer/fixtures/synthetic-event.json`을 보낸다.
 3. localhost 웹에서 안전한 요약을 확인한다.
 4. 서버를 종료하고 같은 DB로 다시 시작한다.
 5. 거래가 남아 있고 동일 이벤트 재전송이 중복을 만들지 않는지 확인한다.

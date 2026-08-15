@@ -7,7 +7,7 @@ import HummingbirdTesting
 @testable import CherryPickerServer
 import CherryPickerCore
 
-/// Failing HTTP contract tests for the issue #7 local server.
+/// HTTP contract tests for the CherryPicker local product server.
 ///
 /// The application is deliberately exercised in-process through
 /// `HummingbirdTesting`.  Fixtures contain no names, balances, secrets, or

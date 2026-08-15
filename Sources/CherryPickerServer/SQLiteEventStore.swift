@@ -31,8 +31,7 @@ private final class SQLiteConnection: @unchecked Sendable {
     }
 }
 
-/// Actor-isolated, disk-backed event and canonical-transaction store for the
-/// disposable issue #7 reliability spike.
+/// Actor-isolated, disk-backed event and canonical-transaction store.
 public actor SQLiteEventStore {
     private let connection: SQLiteConnection
     private let parser: MGCardMessageParser
@@ -151,7 +150,7 @@ public actor SQLiteEventStore {
         }
     }
 
-    // MARK: - Read-only inspection used by the spike tests and report page
+    // MARK: - Read-only inspection used by tests and the product status page
 
     public func receiptCount() -> Int {
         (try? scalarInt(sql: "SELECT COUNT(*) FROM event_receipts")) ?? 0

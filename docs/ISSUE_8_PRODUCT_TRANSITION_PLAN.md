@@ -1,6 +1,6 @@
 # 이슈 #8 로컬 웹 제품 전환 계획
 
-- 상태: 실행 계획
+- 상태: 코드·격리 검증 완료, 운영 인수 대기
 - 기준일: 2026-08-15
 - 선행 검증: #7 Tailscale Outbox 스파이크
 - 후속 기능: #5 거래 검토 웹 UI, #9 실제 문자 수집, #4 현황 대시보드
@@ -77,6 +77,8 @@ Git 기록에는 남으므로 필요하면 복원할 수 있다.
 - 기준 아키텍처, MVP, 테스트 가이드를 로컬 웹 제품 기준으로 바꾼다.
 - Swift Package의 Core·Server·실행 파일을 현역 제품 경계로 명시한다.
 
+상태: 완료.
+
 ### 단계 B: 최소 제품 실행 경로
 
 - #7의 `spike`, `Issue7` 명칭과 임시 설치 경로를 제품 명칭으로 교체한다.
@@ -84,12 +86,19 @@ Git 기록에는 남으므로 필요하면 복원할 수 있다.
 - 합성 이벤트 저장, 조회, 재시작 보존과 eventId 멱등성을 유지한다.
 - 기본 웹은 원문, 이름, 잔액과 인증 identity를 노출하지 않는다.
 
+제품 경로는 `~/Library/Application Support/CherryPicker`, LaunchAgent
+label은 `dev.cherrypicker.localserver`를 사용한다.
+
+상태: 완료.
+
 ### 단계 C: 조합 검증
 
 - Core·Server 자동 테스트를 실행한다.
 - 임시 위치의 디스크 SQLite를 닫았다 다시 열어 데이터를 확인한다.
 - 설치 도구가 네이티브 앱이나 SwiftData 경로를 참조하지 않는지 검사한다.
 - 실제 LaunchAgent 설치와 Tailscale 변경은 별도 승인된 인수 단계에서만 수행한다.
+
+상태: 자동·격리 검증 완료. 실제 LaunchAgent와 Tailscale 운영 인수는 미실행.
 
 ## 6. 지금 결정하지 않는 것
 
@@ -122,3 +131,22 @@ Git 기록에는 남으므로 필요하면 복원할 수 있다.
 - 실제 Outbox 흐름을 연결할 때: 운영 자동화와 재시도 조건을 #9에서 결정
 - 판정 데이터가 쌓인 뒤: 카드 현황과 집계 표시를 #4에서 결정
 - 실제 데이터의 손실 비용이 커진 뒤: 백업과 장기 migration 정책을 별도 이슈로 결정
+
+## 9. 격리 검증 결과 — 2026-08-16
+
+- Core 16개와 Server 23개, 총 39개 자동 테스트가 통과했다.
+- release `CherryPickerLocalServer` 빌드가 통과했다.
+- 제품 LaunchAgent shell·plist·fixture 검증이 통과했다.
+- 임시 HOME 설치에서 제품 binary는 0755, 설정과 LaunchAgent는 0600으로
+  생성됐고 `CherryPickerSpike`와 네이티브 앱 경로는 생성되지 않았다.
+- 임시 HOME 제거 시험에서 binary·설정·LaunchAgent만 제거되고 SQLite와
+  로그는 보존됐다.
+- 임시 SQLite와 localhost 포트 18765에서 합성 이벤트를 저장한 뒤 서버를
+  재시작해 같은 거래가 남는 것을 확인했다.
+- 같은 eventId 재전송은 최초 transactionId를 유지한 `duplicate`였고
+  SQLite에는 canonical 거래 1건과 receipt 1건만 남았다.
+- identity 없는 거래 조회는 HTTP 401이었고 인증된 기본 웹과 JSON에는
+  원문, 카드 끝 네 자리와 identity가 나타나지 않았다.
+
+검증에 사용한 임시 SQLite, 설치 fixture와 로그는 삭제했다. 실제 사용자
+LaunchAgent, Tailscale Serve, 기존 앱과 SwiftData는 변경하지 않았다.

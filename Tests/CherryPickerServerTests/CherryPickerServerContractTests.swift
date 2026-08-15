@@ -4,9 +4,8 @@ import XCTest
 @testable import CherryPickerServer
 import CherryPickerCore
 
-/// The issue #7 spike deliberately starts with an externally observable
-/// contract. These tests are expected to fail until the server contract and
-/// SQLite-backed ingestion implementation are added.
+/// Contract tests for product loss prevention and idempotency at the SQLite
+/// boundary.
 final class CherryPickerServerContractTests: XCTestCase {
     private let codec = OutboxJSONCodec()
 

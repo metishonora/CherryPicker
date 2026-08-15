@@ -1,7 +1,7 @@
 import Foundation
 import Hummingbird
 
-/// Hummingbird adapter for the local issue #7 server.
+/// Hummingbird adapter for the CherryPicker local product server.
 ///
 /// The application is assembled as a value so tests can exercise the exact
 /// routes in-process with HummingbirdTesting.  Persistence, authorization, and
