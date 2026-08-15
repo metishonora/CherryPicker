@@ -1,8 +1,9 @@
 # Issue #7 iPhone Shortcut recipe
 
-Status: real-device setup in progress. This recipe is for synthetic spike data
-only and must not be enabled for ordinary messages until all three local
-capture states have passed.
+Status: real-device capture, manual sync, and immediate automatic sync
+confirmed; broader retry validation remains in progress. This recipe is for
+synthetic spike data only and must not be enabled for ordinary messages until
+all three local capture states have passed.
 
 ## Local Outbox capture
 
@@ -55,25 +56,24 @@ identifier, or transaction.
 
 ## Observed real-device evidence — 2026-08-14
 
-One real iPhone Message automation created a JSON file at 20:31 in
+One real iPhone Message automation created a JSON file in
 `On My iPhone/CherryPickerOutbox`. The file had the valid schema version,
 `eventId`, `capturedAt`, and `originalMessage` fields. Posting that exact file
-through the production HTTP endpoint returned `accepted` with disposition
+through the running spike HTTP endpoint returned `accepted` with disposition
 `stored`; replaying the exact file returned `duplicate` with the same
 transaction ID. Authenticated HTML omitted the full original marker while
 including the safely parsed merchant field.
 
-The 20:31 capture occurred while the iPhone was unlocked on the Home Screen
+The first capture occurred while the iPhone was unlocked on the Home Screen
 with Shortcuts not open. Classify it as passed `unlocked/background with
 Shortcuts not visible` evidence. Home Screen is close background evidence, but
 it is not the original gate's literal `unlocked with another app active`
-state. A second synthetic file, with eventId
-`20260814-2120-4146-8654-000000000000` and capturedAt
-`2026-08-14T21:20:14+09:00`, was created after message arrival while the
+state. A second synthetic file was created after message arrival while the
 iPhone was locked; the locked-state capture passed. The
-unlocked-in-Shortcuts and literal unlocked-in-another-app states remain to be
-explicitly verified, so the matrix remains pending and Gate 1 is not
-complete.
+Later synthetic captures sent while the iPhone was unlocked in Messages
+passed the literal unlocked-in-another-app state. The unlocked-in-Shortcuts
+state remains to be explicitly verified, so the matrix remains pending and
+Gate 1 is not complete.
 
 ## Observed tailnet-only Serve delivery — 2026-08-15
 
@@ -81,24 +81,71 @@ The Mac client posted copies of the two user-approved synthetic Outbox JSON
 files through the tailnet-only Serve route. The first copy returned
 `accepted`/`stored`; its exact replay returned `duplicate` with the same
 transaction ID; the locked-state copy returned `accepted`/`stored`.
-Authenticated HTML omitted `CHERRYPICKER-SELFTEST` while showing
-`Synthetic Merchant` as the parsed merchant.
+Authenticated HTML omitted the original payload while showing only safely
+parsed, non-sensitive fields.
 
 This was delivery of Mac-side copies, not execution of the iPhone sync
 shortcut. The end-to-end retry gate remains pending.
 
-## Observed iCloud sync shortcut preparation — 2026-08-15
+## Observed real-device iPhone sync and deletion — 2026-08-15
 
-The iCloud shortcut `CherryPicker Outbox 동기화` was created and saved on the
-Mac. Its configured workflow filters only `.json` files, sorts by name
-ascending, POSTs one event at a time, and immediately deletes that exact
-source item only when the first result status is `accepted` or `duplicate`.
-Rejected, missing-result, and error paths do not delete a file.
+The iCloud shortcut `CherryPicker Outbox 동기화` was bound on the iPhone to
+`On My iPhone/CherryPickerOutbox` and run against the private Serve route. For
+each source file, it decoded the Dictionary, explicitly extracted
+`schemaVersion`, `eventId`, `capturedAt`, and `originalMessage`, and built a
+JSON `events` array containing one Dictionary. After the run, the configured
+`accepted` or `duplicate` deletion path removed each exact source file and the
+Outbox folder became empty. Both events had already been stored and the server
+transaction and receipt counts remained unchanged, so this is consistent with
+the expected `duplicate` response; the successful response status itself was
+not separately recorded.
 
-The first `Get Folder Contents` folder remains intentionally unresolved:
-the Mac cannot bind `On My iPhone/CherryPickerOutbox`. Selecting that folder
-on the iPhone and completing one real-device sync/retry run remain pending.
-This preparation evidence is not an end-to-end iPhone sync result.
+This confirms manual real-device delivery and selective deletion for an
+already-stored event. The temporary response viewer used for this diagnosis
+was removed afterward, leaving the response parsing and deletion condition in
+place. This does not verify scheduled unattended execution, offline recovery,
+or delivery within 24 hours.
+
+## Observed capture-to-sync configuration — 2026-08-15
+
+In the Mac Shortcuts editor, the iCloud capture shortcut `CherryPicker Outbox`
+was configured so its final action runs `CherryPicker Outbox 동기화`. That run
+action appears only after the local Save File action, preserving the required
+local-first ordering.
+
+The configuration was later visible on the iPhone and passed one fresh
+automatic capture-to-sync run, as recorded below.
+
+## Observed failed immediate automatic delivery — 2026-08-15
+
+After briefly opening Shortcuts on the iPhone, one fresh synthetic marker
+message was sent. Without manually running the sync shortcut, exactly one new
+Outbox file remained after 15 seconds. During the same observation, the Mac
+server was running and listening, while SQLite remained at 3 canonical
+transactions and 3 receipts; no corresponding request reached and committed
+on the server.
+
+This is a failed observation of immediate automatic delivery. A subsequent
+manual run of the sync shortcut delivered that preserved file; the server
+recorded `accepted`/`stored`, SQLite increased to 4 canonical transactions and
+4 receipts, and the exact source file was deleted. This passes the fresh
+real-device `accepted` deletion path and confirms that the server and manual
+sync path were available. It does not identify why the immediate automatic
+invocation failed or pass Gate 3.
+
+## Observed immediate automatic delivery — 2026-08-15
+
+After the final Run Shortcut action was confirmed visible on the iPhone, a
+second fresh synthetic marker message was sent while the iPhone was unlocked
+in Messages. The capture shortcut saved locally first and then invoked the
+sync shortcut without a manual run. After 20 seconds the Outbox was empty,
+SQLite had increased to 5 canonical transactions and 5 receipts, and the
+latest receipt was `accepted`/`stored`.
+
+This passes the immediate fresh-event capture, automatic delivery, and
+`accepted` deletion subcase. It also passes the unlocked-in-another-app local
+capture state. It does not verify the separate Wi-Fi, charger, or daily retry
+triggers, offline recovery, or the 24-hour target, so Gate 3 remains pending.
 
 ## Outbox sync
 
@@ -108,9 +155,11 @@ Tailscale Serve route are active.
 
 For every `.json` file in the Outbox folder, in a stable order:
 
-1. Read and decode the file as a Dictionary.
-2. Wrap it in `{ "events": [event] }` and POST it as JSON to
-   `/api/v1/events/batch` over the private Tailscale HTTPS address.
+1. Read and decode the file as a Dictionary, then explicitly extract
+   `schemaVersion`, `eventId`, `capturedAt`, and `originalMessage`.
+2. In the JSON request editor, create an `events` Array with one Dictionary
+   containing those four values, then POST it to `/api/v1/events/batch` over
+   the private Tailscale HTTPS address.
 3. Inspect the first result item. Delete that one source file only when status
    is `accepted` or `duplicate`.
 4. Preserve the file on transport failure, malformed response, missing result,
