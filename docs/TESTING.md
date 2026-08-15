@@ -1,6 +1,9 @@
-# CherryPicker 테스트 운영 가이드
+# CherryPicker 테스트 운영 가이드 — 대체된 네이티브 경로
 
-- 문서 역할: 반복 가능한 테스트 절차와 인수 증거 기록
+> 이 문서는 네이티브 iOS·SwiftData 프로토타입의 역사적 테스트 기록이다.
+> 현재 검증 기준은 [`PRODUCT_TESTING.md`](PRODUCT_TESTING.md)다.
+
+- 문서 역할: 대체된 네이티브 테스트 절차 기록
 - 적용 범위: 기능 브랜치, UI 검토, SwiftData 마이그레이션, 실기기 인수 테스트
 - 관련 기준: [`ARCHITECTURE.md`](ARCHITECTURE.md), [`MVP_REQUIREMENTS.md`](MVP_REQUIREMENTS.md)
 

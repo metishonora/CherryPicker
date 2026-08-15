@@ -4,7 +4,6 @@ import PackageDescription
 let package = Package(
     name: "CherryPicker",
     platforms: [
-        .iOS("27.0"),
         .macOS(.v13)
     ],
     products: [

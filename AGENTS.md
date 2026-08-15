@@ -4,25 +4,24 @@
 
 - Keep `main` deployable. For non-trivial issue implementation, prefer a dedicated issue branch and worktree so the user's existing checkout remains undisturbed.
 - Merge issue branches into `main` only after explicit user acceptance.
-- Follow `docs/ARCHITECTURE.md` and the accepted ADRs. Treat feature-policy decisions left open there as issue-level decisions; do not invent them during implementation.
+- Follow `docs/PRODUCT_ARCHITECTURE.md` and the accepted ADRs. Treat feature-policy decisions left open there as issue-level decisions; do not invent them during implementation.
 - Preserve captured message originals and user overrides. Do not expose sensitive originals in default UI, logs, analytics, CloudKit, or external services.
-- For SwiftData schema changes, use `VersionedSchema` and `SchemaMigrationPlan`. Never delete or replace the existing store as a migration fallback.
+- The native iOS prototype and its SwiftData store are retired. Do not use them as a product constraint or migration source.
+- Keep the active product boundary in the Swift package: `CherryPickerCore`, `CherryPickerServer`, and `CherryPickerLocalServer`.
 
-## Prototype workflow
+## Product workflow
 
-- Use an isolated SwiftUI prototype or preview when a native UI decision needs review. Use only the fixture state needed for that decision.
-- Prototype approval validates UI and interaction decisions only. Production acceptance must use the real app and runtime.
-- Skip full regression testing for isolated prototypes. Run focused checks when production code, project configuration, persistence, or shared components change.
+- Prefer a thin end-to-end local web slice that exposes a real product flow before making detailed schema or UI policy decisions.
+- Use synthetic fixtures until an issue explicitly authorizes real card messages.
+- Treat the Issue #7 reports as historical spike evidence, not as current product paths or names.
 
 ## Verification
 
 - For `CherryPickerCore` changes, run `DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer swift test`.
-- For relevant app, persistence, or UI changes, run `DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer xcodebuild test -project CherryPickerApp/CherryPicker.xcodeproj -scheme CherryPicker -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`.
-- If the named simulator is unavailable, use an available simulator for the project's supported iOS version and report the substitution.
-- A branch or worktree does not isolate simulator or device app data. Use a dedicated simulator for branch testing, and use a distinct Derived Data path when concurrent worktree builds could overlap.
-- For SwiftData migration changes, test both a fresh store and a disk-backed V1 fixture upgraded to the current schema. Verify transaction count and IDs, originals, user overrides and decisions, and expected relationship backfills.
-- Exercise the upgrade path on a dedicated simulator by installing the V1 app, creating representative data, and installing the new build over it with the same bundle identifier without uninstalling first. Do not use the user's only device store as the first migration test.
-- Require actual-device verification only when acceptance depends on App Intent, Shortcuts automation, background or locked-device execution, signing, or migration of existing device data. Obtain explicit user approval before migrating existing device data.
+- For server, HTTP, SQLite, or package changes, run the full Swift package test suite.
+- For operational script changes, run shell syntax checks, template validation, and fixture-only validation before any installation.
+- Require explicit user approval before installing or starting a LaunchAgent, changing Tailscale Serve, or using real message data.
+- Require actual-device verification only when acceptance depends on iPhone Shortcuts automation, background or locked-device execution, or local Outbox file behavior.
 
 ## Completion
 

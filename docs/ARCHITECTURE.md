@@ -1,6 +1,11 @@
-# CherryPicker 아키텍처
+# CherryPicker 아키텍처 — 대체된 네이티브 설계
 
-- 상태: 승인됨
+> 이 문서는 네이티브 iOS·SwiftData 프로토타입의 역사적 설계 기록이다.
+> 현재 제품 기준은 [`PRODUCT_ARCHITECTURE.md`](PRODUCT_ARCHITECTURE.md)와
+> [ADR-0006](adr/0006-local-web-product-transition.md)이다. 새 구현 결정에
+> 이 문서를 사용하지 않는다.
+
+- 상태: ADR-0006으로 대체됨
 - 기준일: 2026-08-11
 - 대상 이슈: [#6 카드·거래·집계 도메인 구조 확정](https://github.com/metishonora/CherryPicker/issues/6)
 - 완료된 기반: [#2 카드 설정](https://github.com/metishonora/CherryPicker/issues/2)

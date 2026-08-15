@@ -1,5 +1,9 @@
 # CherryPicker 초기 제품 구상서
 
+> 이 문서의 문제 정의와 사용자 판정 원칙은 유지한다. 네이티브 앱을
+> 전제로 한 수집·저장 방식은 [이슈 #8 전환 계획](ISSUE_8_PRODUCT_TRANSITION_PLAN.md)과
+> [ADR-0006](adr/0006-local-web-product-transition.md)으로 대체됐다.
+
 - 문서 상태: 합의된 초기 방향 기록
 - 대상: 개인용
 - 기준일: 2026-07-31
