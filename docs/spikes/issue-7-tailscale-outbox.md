@@ -336,7 +336,8 @@ The in-progress real-device capture, sync, retry, and cleanup recipe is in
 architecture. **Do not retire the native app or migrate existing SwiftData
 yet.** The core loss-prevention and idempotency model worked with synthetic
 data, including locked-device Mac-offline recovery over LTE and full post-login
-recovery. Remaining items are cleanup and explicitly recorded low-risk waivers,
+recovery. The synthetic runtime cleanup was subsequently completed as recorded
+below. The remaining uncertainties are explicitly recorded low-risk waivers,
 not known data-integrity defects.
 
 ### Reliability observed
@@ -399,14 +400,16 @@ SwiftData store. Keep the native app and its data unchanged. If the conditional
 go is accepted, define export/import, reconciliation, backup, and rollback in a
 separate migration issue before any cutover.
 
-### Remaining closure checks
+### Closure state — 2026-08-15
 
-1. Accept the low-risk Gate 1 waiver recorded above or perform one literal
-   capture with Shortcuts visible. The more restrictive background and locked
-   states already passed repeatedly.
-2. Optionally observe one locked scheduled-daily fire; immediate and charger
-   triggers already prove unattended execution, so this is not a data-integrity
-   blocker.
-3. After the decision, disable the synthetic automations and remove synthetic
-   runtime data and installed temporary services using the documented cleanup
-   procedure. Keep the source, tests, scripts, and report.
+- The low-risk Gate 1 waiver is accepted: the more restrictive background and
+  locked states passed repeatedly, so a separate Shortcuts-visible capture is
+  not required.
+- Observing a locked scheduled-daily fire remains an optional future smoke test.
+  Immediate and charger triggers already provide unattended-run evidence.
+- The user disabled the four synthetic iPhone automations. The dedicated
+  Tailscale Serve route, LaunchAgent, installed test binary and config, synthetic
+  SQLite database and sidecars, and dedicated logs were removed. Follow-up
+  verification found no service, listener, route, or installed runtime path.
+  The native app and SwiftData were outside the cleanup targets. Source, tests,
+  scripts, and this report remain in the repository.

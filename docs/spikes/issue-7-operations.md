@@ -150,6 +150,16 @@ remove the native app's store and does not change a Tailscale Serve route.
 Review and clean up the separate Tailscale route and any preserved logs using
 the current, explicitly chosen paths.
 
+### Observed cleanup — 2026-08-15
+
+After the user disabled the four synthetic iPhone automations, the dedicated
+HTTPS 443 Serve route to `127.0.0.1:8765` was removed. The uninstall script was
+then run with `--delete-synthetic-data`, and the two dedicated test log files
+were removed separately. Verification found no loaded LaunchAgent, no listener
+on port 8765, no remaining Serve route to that listener, and none of the exact
+installed plist, binary, config, SQLite, SQLite sidecar, or log paths. No native
+app or SwiftData path was targeted by the cleanup commands.
+
 ## Validation commands
 
 From the repository root, the operational asset checks are:
