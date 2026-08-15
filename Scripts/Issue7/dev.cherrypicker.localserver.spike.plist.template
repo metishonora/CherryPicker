@@ -5,9 +5,7 @@
 	<key>Label</key>
 	<string>dev.cherrypicker.localserver.spike</string>
 	<key>ProgramArguments</key>
-	<array>
-		<string>__CHERRYPICKER_BINARY_PATH__</string>
-	</array>
+	<array/>
 	<key>RunAtLoad</key>
 	<true/>
 	<key>KeepAlive</key>

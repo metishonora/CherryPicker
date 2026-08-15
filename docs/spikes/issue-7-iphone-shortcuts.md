@@ -102,9 +102,9 @@ not separately recorded.
 
 This confirms manual real-device delivery and selective deletion for an
 already-stored event. The temporary response viewer used for this diagnosis
-was removed afterward, leaving the response parsing and deletion condition in
-place. This does not verify scheduled unattended execution, offline recovery,
-or delivery within 24 hours.
+was removed afterward. The shortcut checks the response text for `accepted`
+or `duplicate` before entering the deletion condition. This manual observation
+alone does not verify unattended recovery or delivery within 24 hours.
 
 ## Observed capture-to-sync configuration — 2026-08-15
 
@@ -144,8 +144,41 @@ latest receipt was `accepted`/`stored`.
 
 This passes the immediate fresh-event capture, automatic delivery, and
 `accepted` deletion subcase. It also passes the unlocked-in-another-app local
-capture state. It does not verify the separate Wi-Fi, charger, or daily retry
-triggers, offline recovery, or the 24-hour target, so Gate 3 remains pending.
+capture state. Wi-Fi and daily retry triggers and the 24-hour target remain
+unverified, so Gate 3 remains pending.
+
+## Observed Mac-offline charger recovery and deletion — 2026-08-15
+
+In an earlier manual run, the shortcut reached its successful-response
+condition, but the default Delete Files behavior could not move the local
+Outbox JSON file to Recently Deleted. The file was preserved and the shortcut
+displayed an error. Enabling `Delete Immediately` in the action details and
+manually rerunning then removed that file.
+
+The Mac test server was intentionally stopped before a locked iPhone received
+a synthetic message. One Outbox JSON file was preserved locally. After the
+server restarted, `/healthz` returned `ok` and SQLite held 6 canonical
+transactions and 6 receipts before recovery began.
+
+While the iPhone was locked and showed LTE rather than Wi-Fi, its charger
+automation sent the preserved event without a manual run. SQLite increased to
+7 canonical transactions and 7 receipts. The request reached the successful
+response condition, but iOS displayed a deletion confirmation, so the source
+file remained in the Outbox.
+
+The user then enabled
+`설정 > 앱 > 단축어 > 고급 > 확인 없이 삭제 허용`. A retry completed without
+a deletion alert and left the Outbox empty. One additional fresh real-device
+test also completed without an alert, left the Outbox empty, and brought
+SQLite to a final 9 canonical transactions and 9 receipts while server health
+remained `ok`.
+
+Immediate deletion is not recoverable, so the action must remain strictly
+inside the `accepted` or `duplicate` condition. This passes the locked/LTE
+charger unattended delivery-and-delete subcase and the Mac-offline local
+preservation and recovery-trigger subcase. Wi-Fi and daily retry, the 24-hour
+target, full reboot recovery, and other-user cases remain unverified, so Gate
+3 remains pending.
 
 ## Outbox sync
 
@@ -160,10 +193,19 @@ For every `.json` file in the Outbox folder, in a stable order:
 2. In the JSON request editor, create an `events` Array with one Dictionary
    containing those four values, then POST it to `/api/v1/events/batch` over
    the private Tailscale HTTPS address.
-3. Inspect the first result item. Delete that one source file only when status
-   is `accepted` or `duplicate`.
+3. For this one-file request, check the response text for `accepted` or
+   `duplicate`. Delete that one source file only inside that condition, with
+   Delete Files configured to `Delete Immediately`.
 4. Preserve the file on transport failure, malformed response, missing result,
    or `rejected`. Do not print or notify with the original message body.
+
+For unattended deletion, enable
+`Settings > Apps > Shortcuts > Advanced > Allow Deleting Without Confirmation`
+on the test iPhone. This is a device-wide permission that increases the
+deletion authority of every Shortcut, not only CherryPicker. Keep Delete Files
+configured as `Delete Immediately` strictly inside the `accepted` or
+`duplicate` condition, and validate the permission with synthetic data before
+depending on a locked automation.
 
 Use small per-file requests for the spike so a partial response cannot delete
 an unrelated file. Exact event replay is safe because the server commits its

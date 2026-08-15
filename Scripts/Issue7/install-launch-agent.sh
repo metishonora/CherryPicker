@@ -45,6 +45,13 @@ require_non_symlink() {
 	fi
 }
 
+insert_plist_string() {
+	local key_path="$1"
+	local value="$2"
+	local plist_path="$3"
+	/usr/bin/plutil -insert "$key_path" -string "$value" "$plist_path"
+}
+
 replace_plist_string() {
 	local key_path="$1"
 	local value="$2"
@@ -63,6 +70,25 @@ validate_plist_value() {
 	fi
 }
 
+validate_plist_array_count() {
+	local key_path="$1"
+	local expected="$2"
+	local plist_path="$3"
+	local actual
+	actual="$(/usr/bin/plutil -extract "$key_path" raw -o - "$plist_path")" || die "rendered plist is missing $key_path"
+	if [[ "$actual" != "$expected" ]]; then
+		die "rendered plist has an unexpected item count for $key_path"
+	fi
+}
+
+validate_plist_key_absent() {
+	local key_path="$1"
+	local plist_path="$2"
+	if /usr/bin/plutil -extract "$key_path" raw -o - "$plist_path" >/dev/null 2>&1; then
+		die "rendered plist has an unexpected $key_path value"
+	fi
+}
+
 render_launch_agent() {
 	local target_path="$1"
 	local binary_path="$2"
@@ -75,7 +101,7 @@ render_launch_agent() {
 	temporary_path="$(mktemp "${target_path}.XXXXXX")" || die "could not create a temporary plist"
 	cleanup_paths+=("$temporary_path")
 	/bin/cp "$PLIST_TEMPLATE_PATH" "$temporary_path" || die "could not copy the plist template"
-	replace_plist_string 'ProgramArguments.0' "$binary_path" "$temporary_path" || die "could not set the binary path"
+	insert_plist_string 'ProgramArguments.0' "$binary_path" "$temporary_path" || die "could not set the binary path"
 	replace_plist_string 'EnvironmentVariables.CHERRYPICKER_ALLOWED_TAILSCALE_LOGIN' "$allowed_login" "$temporary_path" || die "could not set the allowed login"
 	replace_plist_string 'EnvironmentVariables.CHERRYPICKER_DB_PATH' "$database_path" "$temporary_path" || die "could not set the database path"
 	replace_plist_string 'StandardOutPath' "$stdout_path" "$temporary_path" || die "could not set the standard output path"
@@ -83,6 +109,8 @@ render_launch_agent() {
 	/usr/bin/plutil -lint "$temporary_path" >/dev/null || die "rendered launch-agent plist is invalid"
 	validate_plist_value 'Label' "$LABEL" "$temporary_path"
 	validate_plist_value 'ProgramArguments.0' "$binary_path" "$temporary_path"
+	validate_plist_array_count 'ProgramArguments' '1' "$temporary_path"
+	validate_plist_key_absent 'ProgramArguments.1' "$temporary_path"
 	validate_plist_value 'EnvironmentVariables.CHERRYPICKER_ALLOWED_TAILSCALE_LOGIN' "$allowed_login" "$temporary_path"
 	validate_plist_value 'EnvironmentVariables.CHERRYPICKER_DB_PATH' "$database_path" "$temporary_path"
 	validate_plist_value 'EnvironmentVariables.CHERRYPICKER_PORT' '8765' "$temporary_path"

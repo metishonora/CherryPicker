@@ -17,6 +17,13 @@ replace_plist_string() {
 	/usr/bin/plutil -replace "$key_path" -string "$value" "$plist_path"
 }
 
+insert_plist_string() {
+	local key_path="$1"
+	local value="$2"
+	local plist_path="$3"
+	/usr/bin/plutil -insert "$key_path" -string "$value" "$plist_path"
+}
+
 expect_value() {
 	local key_path="$1"
 	local expected="$2"
@@ -25,6 +32,25 @@ expect_value() {
 	actual="$(/usr/bin/plutil -extract "$key_path" raw -o - "$plist_path")" || die "missing plist key $key_path"
 	if [[ "$actual" != "$expected" ]]; then
 		die "unexpected value for plist key $key_path"
+	fi
+}
+
+expect_array_count() {
+	local key_path="$1"
+	local expected="$2"
+	local plist_path="$3"
+	local actual
+	actual="$(/usr/bin/plutil -extract "$key_path" raw -o - "$plist_path")" || die "missing plist array $key_path"
+	if [[ "$actual" != "$expected" ]]; then
+		die "unexpected item count for plist array $key_path"
+	fi
+}
+
+expect_absent() {
+	local key_path="$1"
+	local plist_path="$2"
+	if /usr/bin/plutil -extract "$key_path" raw -o - "$plist_path" >/dev/null 2>&1; then
+		die "unexpected plist key $key_path"
 	fi
 }
 
@@ -54,7 +80,7 @@ fixture_stdout="$fixture_dir/localserver.stdout.log"
 fixture_stderr="$fixture_dir/localserver.stderr.log"
 fixture_plist_path="$fixture_dir/dev.cherrypicker.localserver.spike.plist"
 
-replace_plist_string 'ProgramArguments.0' "$fixture_binary" "$fixture_plist"
+insert_plist_string 'ProgramArguments.0' "$fixture_binary" "$fixture_plist"
 replace_plist_string 'EnvironmentVariables.CHERRYPICKER_ALLOWED_TAILSCALE_LOGIN' "$fixture_login" "$fixture_plist"
 replace_plist_string 'EnvironmentVariables.CHERRYPICKER_DB_PATH' "$fixture_database" "$fixture_plist"
 replace_plist_string 'StandardOutPath' "$fixture_stdout" "$fixture_plist"
@@ -62,6 +88,8 @@ replace_plist_string 'StandardErrorPath' "$fixture_stderr" "$fixture_plist"
 /usr/bin/plutil -lint "$fixture_plist" >/dev/null || die 'rendered launch-agent fixture is invalid'
 expect_value 'Label' 'dev.cherrypicker.localserver.spike' "$fixture_plist"
 expect_value 'ProgramArguments.0' "$fixture_binary" "$fixture_plist"
+expect_array_count 'ProgramArguments' '1' "$fixture_plist"
+expect_absent 'ProgramArguments.1' "$fixture_plist"
 expect_value 'EnvironmentVariables.CHERRYPICKER_ALLOWED_TAILSCALE_LOGIN' "$fixture_login" "$fixture_plist"
 expect_value 'EnvironmentVariables.CHERRYPICKER_DB_PATH' "$fixture_database" "$fixture_plist"
 expect_value 'EnvironmentVariables.CHERRYPICKER_PORT' '8765' "$fixture_plist"

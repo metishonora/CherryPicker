@@ -1,6 +1,6 @@
 # Issue #7 Tailscale Outbox Spike
 
-- Status: spike implementation with partial real-device validation
+- Status: conditional go; restart and daily-trigger validation remain pending
 - Issue: https://github.com/metishonora/CherryPicker/issues/7
 - Scope: disposable local-first reliability spike; not a production migration
 
@@ -70,6 +70,19 @@ transactions. Logs must not contain original messages, request bodies, or
 identity values.
 
 ## Validation gates
+
+Current evidence status:
+
+- Gate 1 is substantially covered by repeated locked and other-app captures.
+  The literal `Shortcuts visible` state was not separately repeated; the final
+  recommendation treats this as a low-risk waiver because the more restrictive
+  background and locked states passed.
+- Gate 2 passed through the automated server and HTTP suite, including mixed
+  results, exact replay, response-loss retry, parse failure, identity rejection,
+  redaction, and disk reopen behavior.
+- Gate 3 passed immediate delivery plus one Mac-offline, locked/LTE charger
+  recovery-and-delete path. Full Mac restart/login recovery, the daily trigger,
+  and the 24-hour operating target remain pending.
 
 ### Gate 1: local capture
 
@@ -213,13 +226,14 @@ unchanged, so this is consistent with the expected `duplicate` response; the
 successful response status itself was not separately recorded.
 
 The temporary response viewer used for this diagnosis was removed afterward,
-leaving the response parsing and deletion condition in place. This passes
-manual real-device delivery and selective deletion for already-stored events,
-but does not complete Gate 3.
-Scheduled unattended execution, Mac-offline automatic retry, partial success,
-response-loss recovery, external-network VPN On Demand, identity allowlisting,
-full post-login restart recovery, and the 24-hour target remain unverified.
-Gate 1 also remains incomplete as noted above.
+and the shortcut checks the response text for `accepted` or `duplicate` before
+entering the deletion condition. This passes manual real-device delivery and
+selective deletion for already-stored events, but does not complete Gate 3.
+Later observations cover immediate unattended delivery and one locked/LTE
+charger recovery subcase. Partial success, response-loss recovery, Wi-Fi and
+daily retry, the 24-hour target, full post-login restart recovery, and
+other-user cases remain unverified. Gate 1 also remains incomplete as noted
+above.
 
 ### Observed capture-to-sync configuration — 2026-08-15
 
@@ -258,14 +272,124 @@ latest receipt was `accepted`/`stored`.
 
 This passes the immediate fresh-event capture, automatic delivery, and
 `accepted` deletion subcase. It also passes the unlocked-in-another-app local
-capture state. Separate Wi-Fi, charger, and daily retry triggers, offline
-recovery, and the 24-hour target remain unverified, so Gate 3 remains pending.
+capture state. Wi-Fi and daily retry triggers and the 24-hour target remain
+unverified, so Gate 3 remains pending.
+
+### Observed Mac-offline charger recovery and deletion — 2026-08-15
+
+In an earlier manual run, the shortcut reached its successful-response
+condition, but the default Delete Files behavior could not move the local
+Outbox JSON file to Recently Deleted. The file was preserved and the shortcut
+displayed an error. Enabling `Delete Immediately` in the action details and
+manually rerunning then removed that file.
+
+The Mac test server was intentionally stopped before a locked iPhone received
+a synthetic message. One Outbox JSON file was preserved locally. After the
+server restarted, `/healthz` returned `ok` and SQLite held 6 canonical
+transactions and 6 receipts before recovery began.
+
+While the iPhone was locked and showed LTE rather than Wi-Fi, its charger
+automation sent the preserved event without a manual run. SQLite increased to
+7 canonical transactions and 7 receipts. The request reached the successful
+response condition, but iOS displayed a deletion confirmation, so the source
+file remained in the Outbox.
+
+The user then enabled
+`설정 > 앱 > 단축어 > 고급 > 확인 없이 삭제 허용`. A retry completed without
+a deletion alert and left the Outbox empty. One additional fresh real-device
+test also completed without an alert, left the Outbox empty, and brought
+SQLite to a final 9 canonical transactions and 9 receipts while server health
+remained `ok`.
+
+Immediate deletion is not recoverable, so the action must remain strictly
+inside the `accepted` or `duplicate` condition. This passes the locked/LTE
+charger unattended delivery-and-delete subcase and the Mac-offline local
+preservation and recovery-trigger subcase. Wi-Fi and daily retry, the 24-hour
+target, full reboot recovery, and other-user cases remain unverified, so Gate
+3 remains pending.
 
 The in-progress real-device capture, sync, retry, and cleanup recipe is in
 [`issue-7-iphone-shortcuts.md`](issue-7-iphone-shortcuts.md).
 
 ## Go/no-go report
 
-The final report records observed reliability, the privacy boundary, operating
-burden, native-data migration implications, unresolved failure modes, and a
-recommendation to keep the native app or proceed toward the local web system.
+### Recommendation
+
+**Conditional GO** for follow-up development of the file-Outbox and Mac-local
+web architecture. **Do not retire the native app or migrate existing SwiftData
+yet.** The core loss-prevention and idempotency model worked with synthetic
+data, including a locked-device Mac-offline recovery over LTE. The remaining
+work is operational validation rather than a known data-integrity defect.
+
+### Reliability observed
+
+- Local capture completed before networking and preserved one independent JSON
+  file while the Mac service was unavailable.
+- Immediate automatic delivery passed with a fresh event. A charger automation
+  later retried a preserved event while the iPhone was locked on LTE, without a
+  manual Shortcut run.
+- The Mac stored the recovered event before deletion. After the required iOS
+  deletion permission was enabled, the Outbox became empty without a prompt;
+  an additional fresh run repeated that result.
+- Exact event replay returned `duplicate` without another canonical
+  transaction. Per-file requests prevent one result from deleting an unrelated
+  source file.
+- The automated suite covers mixed accepted/duplicate/rejected results,
+  response loss after commit, transaction deduplication, parse failure with
+  original preservation, exact identity authorization, and redacted HTTP
+  output. The final 2026-08-15 run passed all 35 tests.
+
+### Privacy boundary
+
+- Synthetic originals remained in the iPhone-local Outbox until the Mac
+  acknowledged durable storage, then in the Mac-local SQLite store. They were
+  not placed in iCloud Drive, GitHub, public hosting, logs, or default web
+  output.
+- The server binds only to loopback. Tailscale Serve provides tailnet-only
+  HTTPS, Funnel is not used, and the application requires the exact configured
+  Tailscale login.
+- `Delete Immediately` is intentionally confined to the `accepted` or
+  `duplicate` branch. It is not recoverable. The iOS
+  `Allow Deleting Without Confirmation` setting is device-wide, so enabling it
+  increases the deletion authority of every Shortcut on that iPhone and is an
+  ongoing operational risk.
+
+### Operating burden and unresolved risks
+
+- The Mac must be powered, logged in, connected to Tailscale, and reachable
+  often enough to meet the delivery target. LaunchAgent restart was exercised,
+  but a full Mac restart followed by user login and recovery within two minutes
+  has not yet been observed.
+- The locked/LTE charger retry passed. The selected home-Wi-Fi and daily
+  automations still need to be configured; the daily trigger should be observed
+  once while locked before relying on the 24-hour target.
+- The global unattended-delete permission, iOS automation behavior after OS
+  updates, and Tailscale VPN On Demand remain dependencies that need periodic
+  smoke tests.
+- A real second tailnet identity was not exercised. Tailnet-only exposure,
+  loopback binding, deployed wrong-identity rejection, and exact-login tests
+  provide sufficient spike evidence, with integrated other-user testing left
+  as residual risk.
+- Mac SQLite backup, restore, retention, and monitoring are not defined. The
+  spike database is not yet an operational system of record.
+
+### Native-data implications
+
+This spike intentionally did not read, alter, export, or delete the existing
+SwiftData store. Keep the native app and its data unchanged. If the conditional
+go is accepted, define export/import, reconciliation, backup, and rollback in a
+separate migration issue before any cutover.
+
+### Remaining closure checks
+
+1. Restart the Mac, log in, and verify within two minutes that the LaunchAgent,
+   Tailscale Serve route, authenticated web page, and existing SQLite counts
+   recover. Performing the web check from the iPhone on LTE covers the remaining
+   composed external-network path at the same time.
+2. Configure the selected home-Wi-Fi and daily retry automations, then observe
+   one locked daily run without confirmation.
+3. Either perform one literal capture with Shortcuts visible or explicitly
+   accept the low-risk Gate 1 waiver recorded above.
+4. After the decision, disable the synthetic automations and remove synthetic
+   runtime data and installed temporary services using the documented cleanup
+   procedure. Keep the source, tests, scripts, and report.
