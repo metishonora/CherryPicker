@@ -1,9 +1,10 @@
 # Issue #7 iPhone Shortcut recipe
 
-Status: real-device capture, manual sync, and immediate automatic sync
-confirmed; broader retry validation remains in progress. This recipe is for
-synthetic spike data only and must not be enabled for ordinary messages until
-all three local capture states have passed.
+Status: real-device local-first capture, immediate sync, Mac-offline charger
+recovery, and post-restart LTE web access confirmed. This recipe is for
+synthetic spike data only. The literal `Shortcuts visible` capture state was
+not repeated; the final report records a low-risk waiver based on the more
+restrictive background and locked states passing.
 
 ## Local Outbox capture
 
@@ -69,8 +70,8 @@ with Shortcuts not open. Classify it as passed `unlocked/background with
 Shortcuts not visible` evidence. Home Screen is close background evidence, but
 it is not the original gate's literal `unlocked with another app active`
 state. A second synthetic file was created after message arrival while the
-iPhone was locked; the locked-state capture passed. The
-Later synthetic captures sent while the iPhone was unlocked in Messages
+iPhone was locked; the locked-state capture passed. Later synthetic captures
+sent while the iPhone was unlocked in Messages
 passed the literal unlocked-in-another-app state. The unlocked-in-Shortcuts
 state remains to be explicitly verified, so the matrix remains pending and
 Gate 1 is not complete.
@@ -130,8 +131,9 @@ manual run of the sync shortcut delivered that preserved file; the server
 recorded `accepted`/`stored`, SQLite increased to 4 canonical transactions and
 4 receipts, and the exact source file was deleted. This passes the fresh
 real-device `accepted` deletion path and confirms that the server and manual
-sync path were available. It does not identify why the immediate automatic
-invocation failed or pass Gate 3.
+sync path were available. The first immediate invocation failure was not
+explained, but it did not recur after the final Run Shortcut action propagated
+to the iPhone.
 
 ## Observed immediate automatic delivery — 2026-08-15
 
@@ -144,8 +146,8 @@ latest receipt was `accepted`/`stored`.
 
 This passes the immediate fresh-event capture, automatic delivery, and
 `accepted` deletion subcase. It also passes the unlocked-in-another-app local
-capture state. Wi-Fi and daily retry triggers and the 24-hour target remain
-unverified, so Gate 3 remains pending.
+capture state. Later observations cover Mac-offline charger recovery, and the
+home-Wi-Fi and daily retry automations were subsequently configured.
 
 ## Observed Mac-offline charger recovery and deletion — 2026-08-15
 
@@ -176,9 +178,24 @@ remained `ok`.
 Immediate deletion is not recoverable, so the action must remain strictly
 inside the `accepted` or `duplicate` condition. This passes the locked/LTE
 charger unattended delivery-and-delete subcase and the Mac-offline local
-preservation and recovery-trigger subcase. Wi-Fi and daily retry, the 24-hour
-target, full reboot recovery, and other-user cases remain unverified, so Gate
-3 remains pending.
+preservation and recovery-trigger subcase. The selected home-Wi-Fi and daily
+retry automations were subsequently configured. Full reboot recovery and an
+external LTE browser path passed as recorded below; the first scheduled daily
+fire was not separately observed.
+
+## Observed post-restart LTE web recovery — 2026-08-15
+
+The Mac was fully restarted and the user logged in without manually starting
+the server or Tailscale. The system booted at 23:03:19 and the server log
+recorded listening at 23:04:57, approximately 98 seconds later and within the
+two-minute target. The LaunchAgent was running, localhost health returned
+`ok`, and SQLite retained 9 canonical transactions and 9 receipts.
+
+With Wi-Fi disabled, the iPhone opened the same private Tailscale root address
+in Safari over LTE. The authenticated page displayed `transactions` and
+`syncResult`. This passes the composed post-login Mac recovery, persistent
+Serve route, Tailscale VPN/external-network, authenticated web, and existing-DB
+recovery path.
 
 ## Outbox sync
 

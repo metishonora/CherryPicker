@@ -1,6 +1,6 @@
 # Issue #7 Tailscale Outbox Spike
 
-- Status: conditional go; restart and daily-trigger validation remain pending
+- Status: go for file-Outbox follow-up; native cutover remains a no-go
 - Issue: https://github.com/metishonora/CherryPicker/issues/7
 - Scope: disposable local-first reliability spike; not a production migration
 
@@ -80,9 +80,10 @@ Current evidence status:
 - Gate 2 passed through the automated server and HTTP suite, including mixed
   results, exact replay, response-loss retry, parse failure, identity rejection,
   redaction, and disk reopen behavior.
-- Gate 3 passed immediate delivery plus one Mac-offline, locked/LTE charger
-  recovery-and-delete path. Full Mac restart/login recovery, the daily trigger,
-  and the 24-hour operating target remain pending.
+- Gate 3 passed immediate delivery, one Mac-offline locked/LTE charger
+  recovery-and-delete path, and full post-login recovery with an authenticated
+  LTE browser check. Home-Wi-Fi and daily retries are configured; the first
+  scheduled daily fire was not separately observed.
 
 ### Gate 1: local capture
 
@@ -187,8 +188,8 @@ with Shortcuts not open. Classify it as passed `unlocked/background with
 Shortcuts not visible` evidence. Home Screen is close background evidence, but
 it is not the original gate's literal `unlocked with another app active`
 state. A second synthetic file was created after message arrival while the
-iPhone was locked; the locked-state capture passed. The
-Later synthetic captures sent while the iPhone was unlocked in Messages
+iPhone was locked; the locked-state capture passed. Later synthetic captures
+sent while the iPhone was unlocked in Messages
 passed the literal unlocked-in-another-app state. The unlocked-in-Shortcuts
 state remains to be explicitly verified, so the matrix remains pending and
 Gate 1 is not complete.
@@ -229,11 +230,11 @@ The temporary response viewer used for this diagnosis was removed afterward,
 and the shortcut checks the response text for `accepted` or `duplicate` before
 entering the deletion condition. This passes manual real-device delivery and
 selective deletion for already-stored events, but does not complete Gate 3.
-Later observations cover immediate unattended delivery and one locked/LTE
-charger recovery subcase. Partial success, response-loss recovery, Wi-Fi and
-daily retry, the 24-hour target, full post-login restart recovery, and
-other-user cases remain unverified. Gate 1 also remains incomplete as noted
-above.
+Later observations cover immediate unattended delivery, one locked/LTE
+charger recovery subcase, and post-login restart recovery. Partial success,
+response-loss recovery, and other-user rejection are covered by the automated
+and configuration evidence described in the final report. Gate 1 retains the
+explicit low-risk waiver noted above.
 
 ### Observed capture-to-sync configuration — 2026-08-15
 
@@ -258,8 +259,9 @@ manual run of the sync shortcut delivered that preserved file; the server
 recorded `accepted`/`stored`, SQLite increased to 4 canonical transactions and
 4 receipts, and the exact source file was deleted. This passes the fresh
 real-device `accepted` deletion path and confirms that the server and manual
-sync path were available. The immediate invocation failure is still
-unexplained, and Gate 3 remains pending.
+sync path were available. The first immediate invocation failure was not
+explained, but it did not recur after the final Run Shortcut action propagated
+to the iPhone.
 
 ### Observed immediate automatic delivery — 2026-08-15
 
@@ -272,8 +274,8 @@ latest receipt was `accepted`/`stored`.
 
 This passes the immediate fresh-event capture, automatic delivery, and
 `accepted` deletion subcase. It also passes the unlocked-in-another-app local
-capture state. Wi-Fi and daily retry triggers and the 24-hour target remain
-unverified, so Gate 3 remains pending.
+capture state. Later observations cover Mac-offline charger recovery, and the
+home-Wi-Fi and daily retry automations were subsequently configured.
 
 ### Observed Mac-offline charger recovery and deletion — 2026-08-15
 
@@ -304,9 +306,24 @@ remained `ok`.
 Immediate deletion is not recoverable, so the action must remain strictly
 inside the `accepted` or `duplicate` condition. This passes the locked/LTE
 charger unattended delivery-and-delete subcase and the Mac-offline local
-preservation and recovery-trigger subcase. Wi-Fi and daily retry, the 24-hour
-target, full reboot recovery, and other-user cases remain unverified, so Gate
-3 remains pending.
+preservation and recovery-trigger subcase. The selected home-Wi-Fi and daily
+retry automations were subsequently configured. The first scheduled daily fire
+was not separately observed.
+
+### Observed full restart and external LTE web recovery — 2026-08-15
+
+The Mac was fully restarted and the user logged in without manually starting
+the local server or Tailscale. The system booted at 23:03:19 and the server log
+recorded listening at 23:04:57, approximately 98 seconds later and within the
+two-minute target. The LaunchAgent was running, `127.0.0.1:8765` was listening,
+localhost health returned `ok`, and SQLite retained 9 canonical transactions
+and 9 receipts.
+
+With Wi-Fi disabled, the iPhone opened the same private Tailscale root address
+in Safari over LTE. The authenticated page displayed `transactions` and
+`syncResult`. This passes the composed post-login LaunchAgent, persistent
+tailnet-only Serve, Tailscale VPN/external-network, authenticated web, and
+existing-DB recovery path.
 
 The in-progress real-device capture, sync, retry, and cleanup recipe is in
 [`issue-7-iphone-shortcuts.md`](issue-7-iphone-shortcuts.md).
@@ -315,11 +332,12 @@ The in-progress real-device capture, sync, retry, and cleanup recipe is in
 
 ### Recommendation
 
-**Conditional GO** for follow-up development of the file-Outbox and Mac-local
-web architecture. **Do not retire the native app or migrate existing SwiftData
+**GO** for follow-up development of the file-Outbox and Mac-local web
+architecture. **Do not retire the native app or migrate existing SwiftData
 yet.** The core loss-prevention and idempotency model worked with synthetic
-data, including a locked-device Mac-offline recovery over LTE. The remaining
-work is operational validation rather than a known data-integrity defect.
+data, including locked-device Mac-offline recovery over LTE and full post-login
+recovery. Remaining items are cleanup and explicitly recorded low-risk waivers,
+not known data-integrity defects.
 
 ### Reliability observed
 
@@ -357,12 +375,13 @@ work is operational validation rather than a known data-integrity defect.
 ### Operating burden and unresolved risks
 
 - The Mac must be powered, logged in, connected to Tailscale, and reachable
-  often enough to meet the delivery target. LaunchAgent restart was exercised,
-  but a full Mac restart followed by user login and recovery within two minutes
-  has not yet been observed.
-- The locked/LTE charger retry passed. The selected home-Wi-Fi and daily
-  automations still need to be configured; the daily trigger should be observed
-  once while locked before relying on the 24-hour target.
+  often enough to meet the delivery target. Full restart followed by login
+  recovered the service in approximately 98 seconds, but this remains an
+  operating dependency rather than an availability guarantee.
+- The locked/LTE charger retry passed, and the selected home-Wi-Fi and daily
+  automations are configured. The first scheduled daily fire was not separately
+  observed; the immediate and charger paths provide the actual unattended-run
+  evidence.
 - The global unattended-delete permission, iOS automation behavior after OS
   updates, and Tailscale VPN On Demand remain dependencies that need periodic
   smoke tests.
@@ -382,14 +401,12 @@ separate migration issue before any cutover.
 
 ### Remaining closure checks
 
-1. Restart the Mac, log in, and verify within two minutes that the LaunchAgent,
-   Tailscale Serve route, authenticated web page, and existing SQLite counts
-   recover. Performing the web check from the iPhone on LTE covers the remaining
-   composed external-network path at the same time.
-2. Configure the selected home-Wi-Fi and daily retry automations, then observe
-   one locked daily run without confirmation.
-3. Either perform one literal capture with Shortcuts visible or explicitly
-   accept the low-risk Gate 1 waiver recorded above.
-4. After the decision, disable the synthetic automations and remove synthetic
+1. Accept the low-risk Gate 1 waiver recorded above or perform one literal
+   capture with Shortcuts visible. The more restrictive background and locked
+   states already passed repeatedly.
+2. Optionally observe one locked scheduled-daily fire; immediate and charger
+   triggers already prove unattended execution, so this is not a data-integrity
+   blocker.
+3. After the decision, disable the synthetic automations and remove synthetic
    runtime data and installed temporary services using the documented cleanup
    procedure. Keep the source, tests, scripts, and report.

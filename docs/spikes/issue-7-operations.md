@@ -88,6 +88,17 @@ curl --fail --silent http://127.0.0.1:8765/healthz
 The expected response is `ok`. A failure here should be resolved before any
 Tailscale route is enabled.
 
+### Observed full restart recovery — 2026-08-15
+
+The test Mac was fully restarted and the user logged in without manually
+starting the local server or Tailscale. The system booted at 23:03:19 and the
+server log recorded listening at 23:04:57, approximately 98 seconds later and
+within the two-minute target. The LaunchAgent was running, localhost health
+returned `ok`, and the disk-backed SQLite store retained 9 canonical
+transactions and 9 receipts. An iPhone on LTE then opened the authenticated
+private Tailscale web page and saw `transactions` and `syncResult`, confirming
+that the composed Serve route also recovered.
+
 ## Tailscale Serve (separate approval)
 
 Tailscale configuration is deliberately outside the scripts. After reviewing
