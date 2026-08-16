@@ -1,6 +1,6 @@
 # 이슈 #8 로컬 웹 제품 전환 계획
 
-- 상태: 운영 인수 완료, 코드 검토·병합 대기
+- 상태: 완료
 - 기준일: 2026-08-15
 - 선행 검증: #7 Tailscale Outbox 스파이크
 - 후속 기능: #5 거래 검토 웹 UI, #9 실제 문자 수집, #4 현황 대시보드
@@ -173,3 +173,4 @@ LaunchAgent, Tailscale Serve, 기존 앱과 SwiftData는 변경하지 않았다.
   테이블은 비어 있고 LaunchAgent와 Tailscale Serve는 실행 중이다.
 
 기존 앱, SwiftData와 그 밖의 사용자 데이터는 읽거나 변경하지 않았다.
+검증된 이슈 브랜치는 2026-08-16에 `main`으로 fast-forward 병합했다.
