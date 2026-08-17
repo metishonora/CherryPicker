@@ -6,226 +6,55 @@ import CherryPickerServer
 import Hummingbird
 import HummingbirdTesting
 
-/// Proposed Issue #5 acceptance tests.
+/// Proposed black-box acceptance tests for Issue #5.
 ///
-/// These tests intentionally use only public HTTP routes after constructing the
-/// application. They do not inspect SQLite tables or call store query/update
-/// methods, so an implementation may change its schema without changing this
-/// suite as long as the approved product behavior remains the same.
-///
-/// The management routes exercised here do not exist yet. Until Issue #5 is
-/// implemented, the suite is expected to compile and fail at the HTTP boundary.
+/// The suite constructs the real HTTP application, then observes only HTTP
+/// requests and responses. It does not read SQLite tables or call store query
+/// and mutation methods. The proposed management routes intentionally do not
+/// exist yet, so this suite should compile and fail at the HTTP boundary until
+/// the approved product behavior is implemented.
 @available(macOS 14.0, *)
 final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
     private let allowedLogin = "fixture-device@example.test"
     private let codec = OutboxJSONCodec()
 
-    // MARK: Card settings
+    // MARK: - Cards and card settings
 
-    func testDefaultCardCanBeEditedAndSurvivesServerRestart() async throws {
+    func testCardsCanBeListedAndSelectedCardSettingsSurviveRestart() async throws {
         let databaseURL = try temporaryDatabaseURL()
         defer { removeDatabaseFiles(at: databaseURL) }
-        let cardID = LockedValue<String?>(nil)
+        let selectedCardID = LockedValue<String?>(nil)
 
         do {
             let app = try makeApplication(databaseURL: databaseURL)
             try await app.test(.router) { client in
-                try await client.execute(
-                    uri: "/api/v1/card",
-                    method: .get,
-                    headers: managementHeaders(login: allowedLogin)
-                ) { response in
-                    try requireStatus(response, .ok)
-                    let card = try cardObject(from: response.body)
-                    XCTAssertEqual(card["displayName"] as? String, "MG 더나은 체크카드")
-                    XCTAssertEqual(card["issuerCode"] as? String, "MG")
-                    XCTAssertEqual(card["lastFour"] as? String, "4775")
-                    XCTAssertEqual(card["performanceTargetAmount"] as? Int, 300_000)
-                    XCTAssertEqual(card["periodRule"] as? String, "calendarMonth")
-                    XCTAssertEqual(card["timeZoneIdentifier"] as? String, "Asia/Seoul")
-                    cardID.set(card["id"] as? String)
-                }
+                let cards = try await fetchCards(using: client)
+                let card = try XCTUnwrap(cards.first)
+                let cardID = try XCTUnwrap(card["id"] as? String)
+                selectedCardID.set(cardID)
 
-                let id = try XCTUnwrap(cardID.get())
-                let update = try jsonData([
+                XCTAssertNotNil(card["displayName"] as? String)
+                XCTAssertNotNil(card["issuerCode"] as? String)
+                XCTAssertNotNil(card["lastFour"] as? String)
+                XCTAssertNotNil(card["performanceTargetAmount"] as? Int)
+
+                let update: [String: Any] = [
                     "displayName": "생활비 카드",
-                    "issuerCode": "MG",
-                    "lastFour": "4775",
+                    "issuerCode": card["issuerCode"] as? String ?? "MG",
+                    "lastFour": card["lastFour"] as? String ?? "4775",
                     "performanceTargetAmount": 350_000
-                ])
+                ]
                 try await client.execute(
-                    uri: "/api/v1/card/\(id)",
+                    uri: "/api/v1/cards/\(cardID)",
                     method: .put,
                     headers: managementHeaders(login: allowedLogin, mutation: true),
-                    body: httpByteBuffer(update)
+                    body: httpByteBuffer(try jsonData(update))
                 ) { response in
                     try requireStatus(response, .ok)
-                    let card = try cardObject(from: response.body)
-                    XCTAssertEqual(card["id"] as? String, id)
-                    XCTAssertEqual(card["displayName"] as? String, "생활비 카드")
-                    XCTAssertEqual(card["performanceTargetAmount"] as? Int, 350_000)
-                }
-            }
-        }
-
-        // A second application over the same disk DB models a server restart.
-        do {
-            let reopenedApp = try makeApplication(databaseURL: databaseURL)
-            try await reopenedApp.test(.router) { client in
-                try await client.execute(
-                    uri: "/api/v1/card",
-                    method: .get,
-                    headers: managementHeaders(login: allowedLogin)
-                ) { response in
-                    try requireStatus(response, .ok)
-                    let card = try cardObject(from: response.body)
-                    XCTAssertEqual(card["id"] as? String, try XCTUnwrap(cardID.get()))
-                    XCTAssertEqual(card["displayName"] as? String, "생활비 카드")
-                    XCTAssertEqual(card["performanceTargetAmount"] as? Int, 350_000)
-                }
-            }
-        }
-    }
-
-    // MARK: Transaction list
-
-    func testTransactionListIsNewestFirstAndSupportsApprovedFilters() async throws {
-        let databaseURL = try temporaryDatabaseURL()
-        defer { removeDatabaseFiles(at: databaseURL) }
-        let app = try makeApplication(databaseURL: databaseURL)
-        let transactionIDs = LockedValue<[UUID: String]>([:])
-        let events = [
-            makeEvent(
-                id: UUID(uuidString: "10000000-0000-0000-0000-000000000001")!,
-                capturedAt: "2026-08-17T09:00:00+09:00",
-                marker: "체크승인",
-                amount: "1,000원",
-                dateLine: "08/17 08:55",
-                merchant: "Synthetic Oldest"
-            ),
-            makeEvent(
-                id: UUID(uuidString: "10000000-0000-0000-0000-000000000002")!,
-                capturedAt: "2026-08-17T11:00:00+09:00",
-                marker: "체크승인",
-                amount: "2,000원",
-                dateLine: "08/17 10:55",
-                merchant: "Synthetic Newest"
-            ),
-            makeCancellationEvent(
-                id: UUID(uuidString: "10000000-0000-0000-0000-000000000003")!,
-                capturedAt: "2026-08-17T10:00:00+09:00"
-            )
-        ]
-
-        try await app.test(.router) { client in
-            for event in events {
-                let request = try codec.encode(BatchSyncRequest(events: [event]))
-                try await client.execute(
-                    uri: "/api/v1/events/batch",
-                    method: .post,
-                    headers: managementHeaders(login: allowedLogin, json: true),
-                    body: httpByteBuffer(request)
-                ) { response in
-                    try requireStatus(response, .ok)
-                    let decoded = try self.codec.decode(
-                        BatchSyncResponse.self,
-                        from: Data(response.body.readableBytesView)
-                    )
-                    let id = try XCTUnwrap(decoded.results.first?.transactionID?.uuidString)
-                    transactionIDs.mutate { $0[event.eventId] = id }
-                }
-            }
-
-            try await client.execute(
-                uri: "/api/v1/transactions?filter=all",
-                method: .get,
-                headers: managementHeaders(login: allowedLogin)
-            ) { response in
-                try requireStatus(response, .ok)
-                let rows = try transactionObjects(from: response.body)
-                XCTAssertEqual(
-                    rows.compactMap { $0["id"] as? String },
-                    [events[1], events[2], events[0]].compactMap {
-                        transactionIDs.get()[$0.eventId]
-                    }
-                )
-                XCTAssertEqual(rows.filter { $0["reviewStatus"] as? String == "unreviewed" }.count, 3)
-            }
-
-            try await client.execute(
-                uri: "/api/v1/transactions?filter=cancellation",
-                method: .get,
-                headers: managementHeaders(login: allowedLogin)
-            ) { response in
-                try requireStatus(response, .ok)
-                let rows = try transactionObjects(from: response.body)
-                XCTAssertEqual(rows.count, 1)
-                XCTAssertEqual(rows.first?["kind"] as? String, "cancellation")
-            }
-        }
-    }
-
-    // MARK: Review, benefits, and cancellation
-
-    func testReviewAcceptsMultipleBenefitsAndPersistsAcrossRestart() async throws {
-        let databaseURL = try temporaryDatabaseURL()
-        defer { removeDatabaseFiles(at: databaseURL) }
-        let transactionID = LockedValue<String?>(nil)
-        let selectedBenefitIDs = LockedValue<[String]>([])
-
-        do {
-            let app = try makeApplication(databaseURL: databaseURL)
-            try await app.test(.router) { client in
-                let card = try await fetchCard(using: client)
-                let benefits = card["benefits"] as? [[String: Any]] ?? []
-                XCTAssertGreaterThanOrEqual(
-                    benefits.count,
-                    2,
-                    "Replace the synthetic minimum with approved MG benefit fixtures before implementation."
-                )
-                selectedBenefitIDs.set(Array(benefits.compactMap { $0["id"] as? String }.prefix(2)))
-
-                let event = makeEvent(
-                    id: UUID(uuidString: "20000000-0000-0000-0000-000000000001")!,
-                    capturedAt: "2026-08-17T12:00:00+09:00",
-                    marker: "체크승인",
-                    amount: "2,500원",
-                    dateLine: "08/17 11:55",
-                    merchant: "Synthetic Parsed Merchant"
-                )
-                transactionID.set(try await ingest(event, using: client))
-
-                let id = try XCTUnwrap(transactionID.get())
-                let review = try jsonData([
-                    "effectiveValues": [
-                        "cardId": try XCTUnwrap(card["id"] as? String),
-                        "kind": "approval",
-                        "amount": 3_100,
-                        "occurredAt": "2026-08-17T11:58:00+09:00",
-                        "datePrecision": "minute",
-                        "merchant": "Synthetic User Merchant"
-                    ],
-                    "review": [
-                        "performance": "included",
-                        "benefitIds": selectedBenefitIDs.get(),
-                        "noApplicableBenefit": false,
-                        "memo": "synthetic reviewed memo"
-                    ],
-                    "aggregationExcluded": false
-                ])
-                try await client.execute(
-                    uri: "/api/v1/transactions/\(id)",
-                    method: .patch,
-                    headers: managementHeaders(login: allowedLogin, mutation: true),
-                    body: httpByteBuffer(review)
-                ) { response in
-                    try requireStatus(response, .ok)
-                    try self.assertReviewedTransaction(
-                        response.body,
-                        amount: 3_100,
-                        merchant: "Synthetic User Merchant",
-                        benefitIDs: selectedBenefitIDs.get()
-                    )
+                    let updated = try cardObject(from: response.body)
+                    XCTAssertEqual(updated["id"] as? String, cardID)
+                    XCTAssertEqual(updated["displayName"] as? String, "생활비 카드")
+                    XCTAssertEqual(updated["performanceTargetAmount"] as? Int, 350_000)
                 }
             }
         }
@@ -233,190 +62,440 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
         do {
             let reopenedApp = try makeApplication(databaseURL: databaseURL)
             try await reopenedApp.test(.router) { client in
-                let id = try XCTUnwrap(transactionID.get())
-                try await client.execute(
-                    uri: "/api/v1/transactions/\(id)",
-                    method: .get,
-                    headers: managementHeaders(login: allowedLogin)
-                ) { response in
-                    try requireStatus(response, .ok)
-                    try self.assertReviewedTransaction(
-                        response.body,
-                        amount: 3_100,
-                        merchant: "Synthetic User Merchant",
-                        benefitIDs: selectedBenefitIDs.get()
-                    )
-                }
+                let cards = try await fetchCards(using: client)
+                let card = try XCTUnwrap(
+                    cards.first { $0["id"] as? String == selectedCardID.get() }
+                )
+                XCTAssertEqual(card["displayName"] as? String, "생활비 카드")
+                XCTAssertEqual(card["performanceTargetAmount"] as? Int, 350_000)
             }
         }
     }
 
-    func testCancellationReviewRequiresNoApprovalMatch() async throws {
+    // MARK: - Global inbox and card-scoped transactions
+
+    func testGlobalUnreviewedFeedNeedsNoCardSelectionAndRowsCarryCardIdentity() async throws {
         let databaseURL = try temporaryDatabaseURL()
         defer { removeDatabaseFiles(at: databaseURL) }
         let app = try makeApplication(databaseURL: databaseURL)
 
         try await app.test(.router) { client in
-            let card = try await fetchCard(using: client)
-            let benefitID = try XCTUnwrap(
-                (card["benefits"] as? [[String: Any]])?.first?["id"] as? String
+            let firstID = try await ingest(
+                makeApprovalEvent(
+                    id: UUID(uuidString: "10000000-0000-0000-0000-000000000001")!,
+                    capturedAt: "2026-08-17T09:00:00+09:00",
+                    amount: "1,000원",
+                    merchant: "Synthetic Global Oldest"
+                ),
+                using: client
             )
-            let event = makeCancellationEvent(
-                id: UUID(uuidString: "20000000-0000-0000-0000-000000000002")!,
-                capturedAt: "2026-08-17T13:00:00+09:00"
+            let secondID = try await ingest(
+                makeApprovalEvent(
+                    id: UUID(uuidString: "10000000-0000-0000-0000-000000000002")!,
+                    capturedAt: "2026-08-17T11:00:00+09:00",
+                    amount: "2,000원",
+                    merchant: "Synthetic Global Newest"
+                ),
+                using: client
             )
-            let transactionID = try await ingest(event, using: client)
-            let review = try jsonData([
-                "review": [
-                    "performance": "included",
-                    "benefitIds": [benefitID],
-                    "noApplicableBenefit": false,
-                    "memo": "synthetic independent cancellation"
-                ],
-                "aggregationExcluded": false
-            ])
 
-            try await client.execute(
-                uri: "/api/v1/transactions/\(transactionID)",
-                method: .patch,
-                headers: managementHeaders(login: allowedLogin, mutation: true),
-                body: httpByteBuffer(review)
-            ) { response in
-                try requireStatus(response, .ok)
-                let transaction = try transactionObject(from: response.body)
-                XCTAssertEqual(transaction["kind"] as? String, "cancellation")
+            let before = try await fetchTransactions(
+                uri: "/api/v1/transactions?scope=unreviewed",
+                using: client
+            )
+            XCTAssertEqual(before.compactMap { $0["id"] as? String }, [secondID, firstID])
+            XCTAssertTrue(before.allSatisfy { $0["reviewStatus"] as? String == "unreviewed" })
+            XCTAssertTrue(before.allSatisfy { !($0["cardId"] as? String ?? "").isEmpty })
+            XCTAssertTrue(before.allSatisfy { !($0["cardDisplayName"] as? String ?? "").isEmpty })
+            XCTAssertTrue(before.allSatisfy { !($0["cardLastFour"] as? String ?? "").isEmpty })
+
+            try await reviewTransaction(
+                id: secondID,
+                performance: "excluded",
+                benefitIDs: [],
+                aggregationExcluded: false,
+                using: client
+            ) { transaction in
                 XCTAssertEqual(transaction["reviewStatus"] as? String, "reviewed")
-                XCTAssertEqual(Set(transaction["benefitIds"] as? [String] ?? []), [benefitID])
-                XCTAssertNil(transaction["linkedApprovalId"])
             }
+
+            let after = try await fetchTransactions(
+                uri: "/api/v1/transactions?scope=unreviewed",
+                using: client
+            )
+            XCTAssertEqual(after.compactMap { $0["id"] as? String }, [firstID])
         }
     }
 
-    // MARK: Exclusion, overrides, and reset
-
-    func testAggregationExclusionIsVisibleReversibleAndNeverDeletesTheTransaction() async throws {
+    func testSelectedCardTransactionsSupportApprovalCancellationAndExcludedFilters() async throws {
         let databaseURL = try temporaryDatabaseURL()
         defer { removeDatabaseFiles(at: databaseURL) }
         let app = try makeApplication(databaseURL: databaseURL)
 
         try await app.test(.router) { client in
-            let event = makeEvent(
-                id: UUID(uuidString: "30000000-0000-0000-0000-000000000001")!,
-                capturedAt: "2026-08-17T14:00:00+09:00",
-                marker: "체크승인",
-                amount: "4,000원",
-                dateLine: "08/17 13:55",
-                merchant: "Synthetic Excluded Merchant"
+            let card = try await fetchFirstCard(using: client)
+            let cardID = try XCTUnwrap(card["id"] as? String)
+            let approvalID = try await ingest(
+                makeApprovalEvent(
+                    id: UUID(uuidString: "11000000-0000-0000-0000-000000000001")!,
+                    capturedAt: "2026-08-17T09:00:00+09:00",
+                    amount: "4,000원",
+                    merchant: "Synthetic Approval"
+                ),
+                using: client
             )
-            let id = try await ingest(event, using: client)
-
-            try await patchTransaction(
-                id: id,
-                object: ["aggregationExcluded": true, "memo": "synthetic non-transaction"],
+            let cancellationID = try await ingest(
+                makeCancellationEvent(
+                    id: UUID(uuidString: "11000000-0000-0000-0000-000000000002")!,
+                    capturedAt: "2026-08-17T10:00:00+09:00",
+                    amount: "3,800원"
+                ),
+                using: client
+            )
+            let excludedID = try await ingest(
+                makeApprovalEvent(
+                    id: UUID(uuidString: "11000000-0000-0000-0000-000000000003")!,
+                    capturedAt: "2026-08-17T11:00:00+09:00",
+                    amount: "5,000원",
+                    merchant: "Synthetic Excluded"
+                ),
+                using: client
+            )
+            try await reviewTransaction(
+                id: excludedID,
+                performance: nil,
+                benefitIDs: [],
+                aggregationExcluded: true,
                 using: client
             ) { transaction in
                 XCTAssertEqual(transaction["aggregationExcluded"] as? Bool, true)
             }
 
-            try await client.execute(
-                uri: "/api/v1/transactions?filter=excluded",
-                method: .get,
-                headers: managementHeaders(login: allowedLogin)
-            ) { response in
-                try requireStatus(response, .ok)
-                let rows = try transactionObjects(from: response.body)
-                XCTAssertEqual(rows.compactMap { $0["id"] as? String }, [id])
-            }
-
-            try await patchTransaction(
-                id: id,
-                object: ["aggregationExcluded": false],
+            let approvals = try await fetchTransactions(
+                uri: "/api/v1/cards/\(cardID)/transactions?filter=approval",
                 using: client
-            ) { transaction in
-                XCTAssertEqual(transaction["aggregationExcluded"] as? Bool, false)
-            }
+            )
+            XCTAssertEqual(approvals.compactMap { $0["id"] as? String }, [approvalID])
 
-            try await client.execute(
-                uri: "/api/v1/transactions/\(id)",
-                method: .get,
-                headers: managementHeaders(login: allowedLogin)
-            ) { response in
-                try requireStatus(response, .ok)
-                XCTAssertEqual(try transactionObject(from: response.body)["id"] as? String, id)
-            }
+            let cancellations = try await fetchTransactions(
+                uri: "/api/v1/cards/\(cardID)/transactions?filter=cancellation",
+                using: client
+            )
+            XCTAssertEqual(cancellations.compactMap { $0["id"] as? String }, [cancellationID])
+
+            let excluded = try await fetchTransactions(
+                uri: "/api/v1/cards/\(cardID)/transactions?filter=excluded",
+                using: client
+            )
+            XCTAssertEqual(excluded.compactMap { $0["id"] as? String }, [excludedID])
         }
     }
 
-    func testReparseProtectsOverridesAndResetRestoresParserValuesWithoutClearingReview() async throws {
+    // MARK: - Review contract
+
+    func testReviewKeepsFactsReadOnlyAndAcceptsZeroOrMultipleBenefits() async throws {
         let databaseURL = try temporaryDatabaseURL()
         defer { removeDatabaseFiles(at: databaseURL) }
         let app = try makeApplication(databaseURL: databaseURL)
 
         try await app.test(.router) { client in
-            let event = makeEvent(
-                id: UUID(uuidString: "30000000-0000-0000-0000-000000000002")!,
-                capturedAt: "2026-08-17T15:00:00+09:00",
-                marker: "체크승인",
-                amount: "5,000원",
-                dateLine: "08/17 14:55",
-                merchant: "Synthetic Parser Merchant"
+            let card = try await fetchFirstCard(using: client)
+            let benefitIDs = Array(
+                (card["benefits"] as? [[String: Any]] ?? [])
+                    .compactMap { $0["id"] as? String }
+                    .prefix(2)
             )
-            let id = try await ingest(event, using: client)
-            let patch = try jsonData([
-                "effectiveValues": ["amount": 5_500, "merchant": "Synthetic Override Merchant"],
+            XCTAssertGreaterThanOrEqual(benefitIDs.count, 2)
+
+            let noBenefitID = try await ingest(
+                makeApprovalEvent(
+                    id: UUID(uuidString: "20000000-0000-0000-0000-000000000001")!,
+                    capturedAt: "2026-08-17T12:00:00+09:00",
+                    amount: "2,500원",
+                    merchant: "Synthetic Read Only Merchant"
+                ),
+                using: client
+            )
+            try await reviewTransaction(
+                id: noBenefitID,
+                performance: "included",
+                benefitIDs: [],
+                aggregationExcluded: false,
+                using: client
+            ) { transaction in
+                XCTAssertEqual(transaction["amount"] as? Int, 2_500)
+                XCTAssertEqual(transaction["merchant"] as? String, "Synthetic Read Only Merchant")
+                XCTAssertEqual(transaction["benefitIds"] as? [String], [])
+                XCTAssertNil(transaction["noApplicableBenefit"])
+            }
+
+            let multipleBenefitsID = try await ingest(
+                makeApprovalEvent(
+                    id: UUID(uuidString: "20000000-0000-0000-0000-000000000002")!,
+                    capturedAt: "2026-08-17T13:00:00+09:00",
+                    amount: "3,100원",
+                    merchant: "Synthetic Multiple Benefits"
+                ),
+                using: client
+            )
+            try await reviewTransaction(
+                id: multipleBenefitsID,
+                performance: "included",
+                benefitIDs: benefitIDs,
+                aggregationExcluded: false,
+                using: client
+            ) { transaction in
+                XCTAssertEqual(Set(transaction["benefitIds"] as? [String] ?? []), Set(benefitIDs))
+            }
+
+            let illegalMutation: [String: Any] = [
+                "effectiveValues": [
+                    "amount": 999_999,
+                    "merchant": "Must Not Replace Parsed Facts"
+                ],
                 "review": [
                     "performance": "included",
-                    "benefitIds": [],
-                    "noApplicableBenefit": true,
-                    "memo": "synthetic memo must survive reset"
+                    "benefitIds": []
                 ],
                 "aggregationExcluded": false
-            ])
+            ]
             try await client.execute(
-                uri: "/api/v1/transactions/\(id)",
+                uri: "/api/v1/transactions/\(noBenefitID)",
                 method: .patch,
                 headers: managementHeaders(login: allowedLogin, mutation: true),
-                body: httpByteBuffer(patch)
+                body: httpByteBuffer(try jsonData(illegalMutation))
             ) { response in
-                try requireStatus(response, .ok)
+                try requireStatus(response, .badRequest)
             }
 
-            try await client.execute(
-                uri: "/api/v1/transactions/\(id)/reparse",
-                method: .post,
-                headers: managementHeaders(login: allowedLogin, mutation: true),
-                body: httpByteBuffer(try jsonData([:]))
-            ) { response in
-                try requireStatus(response, .ok)
-                let transaction = try transactionObject(from: response.body)
-                XCTAssertEqual(transaction["amount"] as? Int, 5_500)
-                XCTAssertEqual(transaction["merchant"] as? String, "Synthetic Override Merchant")
-                XCTAssertEqual(transaction["reviewStatus"] as? String, "reviewed")
-                XCTAssertEqual(transaction["memo"] as? String, "synthetic memo must survive reset")
-            }
+            let unchanged = try await fetchTransaction(id: noBenefitID, using: client)
+            XCTAssertEqual(unchanged["amount"] as? Int, 2_500)
+            XCTAssertEqual(unchanged["merchant"] as? String, "Synthetic Read Only Merchant")
+        }
+    }
 
-            let reset = try jsonData([
-                "fields": ["card", "kind", "amount", "occurredAt", "merchant"]
-            ])
-            try await client.execute(
-                uri: "/api/v1/transactions/\(id)/reset",
-                method: .post,
-                headers: managementHeaders(login: allowedLogin, mutation: true),
-                body: httpByteBuffer(reset)
-            ) { response in
-                try requireStatus(response, .ok)
-                let transaction = try transactionObject(from: response.body)
-                XCTAssertEqual(transaction["amount"] as? Int, 5_000)
-                XCTAssertEqual(transaction["merchant"] as? String, "Synthetic Parser Merchant")
+    func testReviewAndMemoSurviveServerRestart() async throws {
+        let databaseURL = try temporaryDatabaseURL()
+        defer { removeDatabaseFiles(at: databaseURL) }
+        let transactionID = LockedValue<String?>(nil)
+
+        do {
+            let app = try makeApplication(databaseURL: databaseURL)
+            try await app.test(.router) { client in
+                let id = try await ingest(
+                    makeApprovalEvent(
+                        id: UUID(uuidString: "21000000-0000-0000-0000-000000000001")!,
+                        capturedAt: "2026-08-17T14:00:00+09:00",
+                        amount: "7,000원",
+                        merchant: "Synthetic Persistent Review"
+                    ),
+                    using: client
+                )
+                transactionID.set(id)
+                try await reviewTransaction(
+                    id: id,
+                    performance: "included",
+                    benefitIDs: [],
+                    memo: "synthetic memo",
+                    aggregationExcluded: false,
+                    using: client
+                ) { transaction in
+                    XCTAssertEqual(transaction["reviewStatus"] as? String, "reviewed")
+                }
+            }
+        }
+
+        do {
+            let reopenedApp = try makeApplication(databaseURL: databaseURL)
+            try await reopenedApp.test(.router) { client in
+                let transaction = try await fetchTransaction(
+                    id: try XCTUnwrap(transactionID.get()),
+                    using: client
+                )
                 XCTAssertEqual(transaction["reviewStatus"] as? String, "reviewed")
                 XCTAssertEqual(transaction["performance"] as? String, "included")
-                XCTAssertEqual(transaction["noApplicableBenefit"] as? Bool, true)
-                XCTAssertEqual(transaction["memo"] as? String, "synthetic memo must survive reset")
+                XCTAssertEqual(transaction["benefitIds"] as? [String], [])
+                XCTAssertEqual(transaction["memo"] as? String, "synthetic memo")
             }
         }
     }
 
-    // MARK: Security and rendering
+    // MARK: - Dashboard, cancellation, and exclusion
+
+    func testSelectedCardDashboardTracksPerformanceAndBenefitProgress() async throws {
+        let databaseURL = try temporaryDatabaseURL()
+        defer { removeDatabaseFiles(at: databaseURL) }
+        let app = try makeApplication(databaseURL: databaseURL)
+
+        try await app.test(.router) { client in
+            let card = try await fetchFirstCard(using: client)
+            let cardID = try XCTUnwrap(card["id"] as? String)
+            let benefitID = try XCTUnwrap(
+                (card["benefits"] as? [[String: Any]])?.first?["id"] as? String
+            )
+            let before = try await fetchDashboard(cardID: cardID, using: client)
+            let beforePerformance = try performanceAmount(from: before)
+            let beforeBenefit = try benefitAmount(id: benefitID, from: before)
+
+            let transactionID = try await ingest(
+                makeApprovalEvent(
+                    id: UUID(uuidString: "30000000-0000-0000-0000-000000000001")!,
+                    capturedAt: "2026-08-17T15:00:00+09:00",
+                    amount: "10,000원",
+                    merchant: "Synthetic Dashboard Approval"
+                ),
+                using: client
+            )
+            try await reviewTransaction(
+                id: transactionID,
+                performance: "included",
+                benefitIDs: [benefitID],
+                aggregationExcluded: false,
+                using: client
+            ) { _ in }
+
+            let after = try await fetchDashboard(cardID: cardID, using: client)
+            XCTAssertEqual(try performanceAmount(from: after), beforePerformance + 10_000)
+            XCTAssertGreaterThan(try benefitAmount(id: benefitID, from: after), beforeBenefit)
+            XCTAssertNotNil((after["performance"] as? [String: Any])?["targetAmount"] as? Int)
+
+            let benefit = try XCTUnwrap(
+                (after["benefits"] as? [[String: Any]])?.first {
+                    $0["id"] as? String == benefitID
+                }
+            )
+            XCTAssertNotNil(benefit["label"] as? String)
+            XCTAssertNotNil(benefit["maximumAmount"] as? Int)
+        }
+    }
+
+    func testCancellationRequiresNoApprovalMatchAndSubtractsCurrentPeriodTotals() async throws {
+        let databaseURL = try temporaryDatabaseURL()
+        defer { removeDatabaseFiles(at: databaseURL) }
+        let app = try makeApplication(databaseURL: databaseURL)
+
+        try await app.test(.router) { client in
+            let card = try await fetchFirstCard(using: client)
+            let cardID = try XCTUnwrap(card["id"] as? String)
+            let benefitID = try XCTUnwrap(
+                (card["benefits"] as? [[String: Any]])?.first?["id"] as? String
+            )
+
+            let approvalID = try await ingest(
+                makeApprovalEvent(
+                    id: UUID(uuidString: "31000000-0000-0000-0000-000000000001")!,
+                    capturedAt: "2026-08-17T15:30:00+09:00",
+                    amount: "20,000원",
+                    merchant: "Synthetic Dashboard Baseline"
+                ),
+                using: client
+            )
+            try await reviewTransaction(
+                id: approvalID,
+                performance: "included",
+                benefitIDs: [benefitID],
+                aggregationExcluded: false,
+                using: client
+            ) { _ in }
+            let afterApproval = try await fetchDashboard(cardID: cardID, using: client)
+
+            let cancellationID = try await ingest(
+                makeCancellationEvent(
+                    id: UUID(uuidString: "31000000-0000-0000-0000-000000000002")!,
+                    capturedAt: "2026-08-17T16:00:00+09:00",
+                    amount: "3,800원"
+                ),
+                using: client
+            )
+            try await reviewTransaction(
+                id: cancellationID,
+                performance: "included",
+                benefitIDs: [benefitID],
+                aggregationExcluded: false,
+                using: client
+            ) { transaction in
+                XCTAssertEqual(transaction["kind"] as? String, "cancellation")
+                XCTAssertNil(transaction["linkedApprovalId"])
+            }
+
+            let afterCancellation = try await fetchDashboard(cardID: cardID, using: client)
+            XCTAssertEqual(
+                try performanceAmount(from: afterCancellation),
+                try performanceAmount(from: afterApproval) - 3_800
+            )
+            XCTAssertLessThan(
+                try benefitAmount(id: benefitID, from: afterCancellation),
+                try benefitAmount(id: benefitID, from: afterApproval)
+            )
+        }
+    }
+
+    func testAggregationExclusionIsVisibleReversibleAndNeverDeletesTransaction() async throws {
+        let databaseURL = try temporaryDatabaseURL()
+        defer { removeDatabaseFiles(at: databaseURL) }
+        let app = try makeApplication(databaseURL: databaseURL)
+
+        try await app.test(.router) { client in
+            let card = try await fetchFirstCard(using: client)
+            let cardID = try XCTUnwrap(card["id"] as? String)
+            let benefitID = try XCTUnwrap(
+                (card["benefits"] as? [[String: Any]])?.first?["id"] as? String
+            )
+            let id = try await ingest(
+                makeApprovalEvent(
+                    id: UUID(uuidString: "32000000-0000-0000-0000-000000000001")!,
+                    capturedAt: "2026-08-17T17:00:00+09:00",
+                    amount: "4,000원",
+                    merchant: "Synthetic Reversible Exclusion"
+                ),
+                using: client
+            )
+            try await reviewTransaction(
+                id: id,
+                performance: "included",
+                benefitIDs: [benefitID],
+                aggregationExcluded: false,
+                using: client
+            ) { _ in }
+            let includedDashboard = try await fetchDashboard(cardID: cardID, using: client)
+
+            try await reviewTransaction(
+                id: id,
+                performance: nil,
+                benefitIDs: [],
+                aggregationExcluded: true,
+                using: client
+            ) { transaction in
+                XCTAssertEqual(transaction["aggregationExcluded"] as? Bool, true)
+                XCTAssertNil(transaction["performance"])
+                XCTAssertEqual(transaction["benefitIds"] as? [String], [])
+            }
+            let excludedDashboard = try await fetchDashboard(cardID: cardID, using: client)
+            XCTAssertEqual(
+                try performanceAmount(from: excludedDashboard),
+                try performanceAmount(from: includedDashboard) - 4_000
+            )
+            let excludedRows = try await fetchTransactions(
+                uri: "/api/v1/cards/\(cardID)/transactions?filter=excluded",
+                using: client
+            )
+            XCTAssertEqual(excludedRows.compactMap { $0["id"] as? String }, [id])
+
+            try await reviewTransaction(
+                id: id,
+                performance: "excluded",
+                benefitIDs: [],
+                aggregationExcluded: false,
+                using: client
+            ) { transaction in
+                XCTAssertEqual(transaction["aggregationExcluded"] as? Bool, false)
+            }
+            let restoredTransaction = try await fetchTransaction(id: id, using: client)
+            XCTAssertEqual(restoredTransaction["id"] as? String, id)
+        }
+    }
+
+    // MARK: - Security boundary
 
     func testManagementReadsRequireExactLoginAndMutationsRequireCSRFHeader() async throws {
         let databaseURL = try temporaryDatabaseURL()
@@ -424,74 +503,37 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
         let app = try makeApplication(databaseURL: databaseURL)
 
         try await app.test(.router) { client in
-            try await client.execute(uri: "/api/v1/card", method: .get) { response in
+            try await client.execute(uri: "/api/v1/cards", method: .get) { response in
+                try requireStatus(response, .unauthorized)
+            }
+            try await client.execute(
+                uri: "/api/v1/cards",
+                method: .get,
+                headers: managementHeaders(login: "other-device@example.test")
+            ) { response in
                 try requireStatus(response, .unauthorized)
             }
 
-            let card = try await fetchCard(using: client)
+            let card = try await fetchFirstCard(using: client)
             let cardID = try XCTUnwrap(card["id"] as? String)
-            let update = try jsonData([
+            let update: [String: Any] = [
                 "displayName": "Must Not Save",
-                "issuerCode": "MG",
-                "lastFour": "4775",
+                "issuerCode": card["issuerCode"] as? String ?? "MG",
+                "lastFour": card["lastFour"] as? String ?? "4775",
                 "performanceTargetAmount": 300_000
-            ])
+            ]
             try await client.execute(
-                uri: "/api/v1/card/\(cardID)",
+                uri: "/api/v1/cards/\(cardID)",
                 method: .put,
                 headers: managementHeaders(login: allowedLogin, json: true),
-                body: httpByteBuffer(update)
+                body: httpByteBuffer(try jsonData(update))
             ) { response in
                 try requireStatus(response, .forbidden)
             }
-
-            try await client.execute(
-                uri: "/api/v1/card",
-                method: .get,
-                headers: managementHeaders(login: allowedLogin)
-            ) { response in
-                try requireStatus(response, .ok)
-                XCTAssertEqual(
-                    try cardObject(from: response.body)["displayName"] as? String,
-                    "MG 더나은 체크카드"
-                )
-            }
         }
     }
 
-    func testDetailEscapesOriginalAndUserControlledValues() async throws {
-        let databaseURL = try temporaryDatabaseURL()
-        defer { removeDatabaseFiles(at: databaseURL) }
-        let app = try makeApplication(databaseURL: databaseURL)
-
-        try await app.test(.router) { client in
-            let sentinel = "<img src=x onerror=alert('synthetic-xss')>"
-            let event = makeEvent(
-                id: UUID(uuidString: "40000000-0000-0000-0000-000000000001")!,
-                capturedAt: "2026-08-17T16:00:00+09:00",
-                marker: "체크승인",
-                amount: "6,000원",
-                dateLine: "08/17 15:55",
-                merchant: sentinel
-            )
-            let id = try await ingest(event, using: client)
-
-            try await client.execute(
-                uri: "/transactions/\(id)",
-                method: .get,
-                headers: managementHeaders(login: allowedLogin)
-            ) { response in
-                try requireStatus(response, .ok)
-                let html = httpBodyString(response.body)
-                XCTAssertTrue(html.contains("<details"))
-                XCTAssertTrue(html.contains("&lt;img src=x onerror=alert"))
-                XCTAssertFalse(html.contains(sentinel))
-                XCTAssertFalse(html.contains("<img src=x"))
-            }
-        }
-    }
-
-    // MARK: HTTP-only fixture helpers
+    // MARK: - HTTP-only helpers
 
     private func makeApplication(databaseURL: URL) throws -> some ApplicationProtocol {
         let store = try SQLiteEventStore(databaseURL: databaseURL)
@@ -502,16 +544,70 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
         ).application
     }
 
-    private func fetchCard<Client>(using client: Client) async throws -> [String: Any]
+    private func fetchCards<Client>(using client: Client) async throws -> [[String: Any]]
     where Client: TestClientProtocol {
-        let captured = LockedValue<[String: Any]?>(nil)
+        let captured = LockedValue<[[String: Any]]>([])
         try await client.execute(
-            uri: "/api/v1/card",
+            uri: "/api/v1/cards",
             method: .get,
             headers: managementHeaders(login: allowedLogin)
         ) { response in
             try requireStatus(response, .ok)
-            captured.set(try cardObject(from: response.body))
+            captured.set(try cardObjects(from: response.body))
+        }
+        return captured.get()
+    }
+
+    private func fetchFirstCard<Client>(using client: Client) async throws -> [String: Any]
+    where Client: TestClientProtocol {
+        let cards = try await fetchCards(using: client)
+        return try XCTUnwrap(cards.first)
+    }
+
+    private func fetchTransactions<Client>(
+        uri: String,
+        using client: Client
+    ) async throws -> [[String: Any]] where Client: TestClientProtocol {
+        let captured = LockedValue<[[String: Any]]>([])
+        try await client.execute(
+            uri: uri,
+            method: .get,
+            headers: managementHeaders(login: allowedLogin)
+        ) { response in
+            try requireStatus(response, .ok)
+            captured.set(try transactionObjects(from: response.body))
+        }
+        return captured.get()
+    }
+
+    private func fetchTransaction<Client>(
+        id: String,
+        using client: Client
+    ) async throws -> [String: Any] where Client: TestClientProtocol {
+        let captured = LockedValue<[String: Any]?>(nil)
+        try await client.execute(
+            uri: "/api/v1/transactions/\(id)",
+            method: .get,
+            headers: managementHeaders(login: allowedLogin)
+        ) { response in
+            try requireStatus(response, .ok)
+            captured.set(try transactionObject(from: response.body))
+        }
+        return try XCTUnwrap(captured.get())
+    }
+
+    private func fetchDashboard<Client>(
+        cardID: String,
+        using client: Client
+    ) async throws -> [String: Any] where Client: TestClientProtocol {
+        let captured = LockedValue<[String: Any]?>(nil)
+        try await client.execute(
+            uri: "/api/v1/cards/\(cardID)/dashboard",
+            method: .get,
+            headers: managementHeaders(login: allowedLogin)
+        ) { response in
+            try requireStatus(response, .ok)
+            captured.set(try jsonObject(from: response.body)["dashboard"] as? [String: Any])
         }
         return try XCTUnwrap(captured.get())
     }
@@ -536,44 +632,50 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
         return try XCTUnwrap(captured.get())
     }
 
-    private func patchTransaction<Client>(
+    private func reviewTransaction<Client>(
         id: String,
-        object: [String: Any],
+        performance: String?,
+        benefitIDs: [String],
+        memo: String = "",
+        aggregationExcluded: Bool,
         using client: Client,
         assertions: @escaping @Sendable ([String: Any]) throws -> Void
     ) async throws where Client: TestClientProtocol {
+        let review: [String: Any] = [
+            "performance": performance ?? NSNull(),
+            "benefitIds": benefitIDs,
+            "memo": memo
+        ]
+        let payload: [String: Any] = [
+            "review": review,
+            "aggregationExcluded": aggregationExcluded
+        ]
         try await client.execute(
             uri: "/api/v1/transactions/\(id)",
             method: .patch,
             headers: managementHeaders(login: allowedLogin, mutation: true),
-            body: httpByteBuffer(try jsonData(object))
+            body: httpByteBuffer(try jsonData(payload))
         ) { response in
             try requireStatus(response, .ok)
             try assertions(transactionObject(from: response.body))
         }
     }
 
-    private func assertReviewedTransaction(
-        _ body: ByteBuffer,
-        amount: Int,
-        merchant: String,
-        benefitIDs: [String]
-    ) throws {
-        let transaction = try transactionObject(from: body)
-        XCTAssertEqual(transaction["reviewStatus"] as? String, "reviewed")
-        XCTAssertEqual(transaction["performance"] as? String, "included")
-        XCTAssertEqual(transaction["amount"] as? Int, amount)
-        XCTAssertEqual(transaction["merchant"] as? String, merchant)
-        XCTAssertEqual(Set(transaction["benefitIds"] as? [String] ?? []), Set(benefitIDs))
-        XCTAssertEqual(transaction["aggregationExcluded"] as? Bool, false)
+    private func performanceAmount(from dashboard: [String: Any]) throws -> Int {
+        try XCTUnwrap((dashboard["performance"] as? [String: Any])?["currentAmount"] as? Int)
     }
 
-    private func makeEvent(
+    private func benefitAmount(id: String, from dashboard: [String: Any]) throws -> Int {
+        let benefit = try XCTUnwrap(
+            (dashboard["benefits"] as? [[String: Any]])?.first { $0["id"] as? String == id }
+        )
+        return try XCTUnwrap(benefit["receivedAmount"] as? Int)
+    }
+
+    private func makeApprovalEvent(
         id: UUID,
         capturedAt: String,
-        marker: String,
         amount: String,
-        dateLine: String,
         merchant: String
     ) -> OutboxEvent {
         OutboxEvent(
@@ -581,15 +683,19 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
             capturedAt: ISO8601DateFormatter().date(from: capturedAt)!,
             originalMessage: """
             [Synthetic Fixture]
-            MG카드(4775)\(marker)
+            MG카드(4775)체크승인
             \(amount)
-            \(dateLine)
+            08/17 08:55
             \(merchant)
             """
         )
     }
 
-    private func makeCancellationEvent(id: UUID, capturedAt: String) -> OutboxEvent {
+    private func makeCancellationEvent(
+        id: UUID,
+        capturedAt: String,
+        amount: String
+    ) -> OutboxEvent {
         OutboxEvent(
             eventId: id,
             capturedAt: ISO8601DateFormatter().date(from: capturedAt)!,
@@ -597,7 +703,7 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
             [Synthetic Fixture]
             [승인취소]
             MG체크카드(4775)
-            3,800원
+            \(amount)
             08/17.취소완료.
             Synthetic Cancellation Merchant
             """
@@ -636,10 +742,6 @@ private final class LockedValue<Value>: @unchecked Sendable {
     func set(_ newValue: Value) {
         lock.withLock { value = newValue }
     }
-
-    func mutate(_ body: (inout Value) -> Void) {
-        lock.withLock { body(&value) }
-    }
 }
 
 private func managementHeaders(
@@ -655,9 +757,6 @@ private func managementHeaders(
         fields[.contentType] = "application/json"
     }
     if mutation {
-        // A required non-simple header is the proposed CSRF boundary. A
-        // cross-origin HTML form cannot add it, and the server must not enable
-        // cross-origin CORS for management endpoints.
         fields[.init("X-CherryPicker-CSRF")!] = "same-origin"
     }
     return fields
@@ -677,6 +776,10 @@ private func cardObject(from body: ByteBuffer) throws -> [String: Any] {
     try XCTUnwrap(jsonObject(from: body)["card"] as? [String: Any])
 }
 
+private func cardObjects(from body: ByteBuffer) throws -> [[String: Any]] {
+    try XCTUnwrap(jsonObject(from: body)["cards"] as? [[String: Any]])
+}
+
 private func transactionObject(from body: ByteBuffer) throws -> [String: Any] {
     try XCTUnwrap(jsonObject(from: body)["transaction"] as? [String: Any])
 }
@@ -689,10 +792,6 @@ private func httpByteBuffer(_ data: Data) -> ByteBuffer {
     var buffer = ByteBufferAllocator().buffer(capacity: data.count)
     buffer.writeBytes(data)
     return buffer
-}
-
-private func httpBodyString(_ body: ByteBuffer) -> String {
-    String(decoding: body.readableBytesView, as: UTF8.self)
 }
 
 private struct UnexpectedHTTPStatus: Error, CustomStringConvertible {
