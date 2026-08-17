@@ -14,6 +14,10 @@ public enum SQLiteEventStoreError: Error, Equatable, Sendable {
     case invalidStoredValue(String)
 }
 
+public enum ManagementStoreError: Error, Equatable, Sendable {
+    case invalidInput
+}
+
 private let sqliteTransient = unsafeBitCast(
     -1,
     to: sqlite3_destructor_type.self
@@ -33,6 +37,10 @@ private final class SQLiteConnection: @unchecked Sendable {
 
 /// Actor-isolated, disk-backed event and canonical-transaction store.
 public actor SQLiteEventStore {
+    private static let defaultCardID = UUID(uuidString: "00000000-0000-0000-0000-000000004775")!
+    private static let coffeeBenefitID = UUID(uuidString: "00000000-0000-0000-0001-000000004775")!
+    private static let convenienceBenefitID = UUID(uuidString: "00000000-0000-0000-0002-000000004775")!
+
     private let connection: SQLiteConnection
     private let parser: MGCardMessageParser
 
@@ -123,6 +131,7 @@ public actor SQLiteEventStore {
             )
             let parseResult = parser.parse(event.originalMessage)
             try updateTransaction(id: transactionID, parseResult: parseResult)
+            try assignCard(transactionID: transactionID, parseResult: parseResult)
             let disposition: SyncDisposition
             if case .success = parseResult {
                 disposition = .stored
@@ -264,6 +273,438 @@ public actor SQLiteEventStore {
         return values
     }
 
+    // MARK: - Product management surface
+
+    public func managedCards() throws -> [ManagedCard] {
+        let statement = try prepare("""
+            SELECT id, display_name, issuer_code, last_four, performance_target_amount
+            FROM cards
+            ORDER BY created_at ASC, id ASC
+            """)
+        defer { sqlite3_finalize(statement) }
+
+        var cards: [ManagedCard] = []
+        while true {
+            let result = sqlite3_step(statement)
+            if result == SQLITE_DONE { break }
+            guard result == SQLITE_ROW else {
+                throw SQLiteEventStoreError.statement(lastSQLiteMessage())
+            }
+            cards.append(try decodeCard(from: statement))
+        }
+        return cards
+    }
+
+    public func managedCard(id: UUID) throws -> ManagedCard? {
+        let statement = try prepare("""
+            SELECT id, display_name, issuer_code, last_four, performance_target_amount
+            FROM cards
+            WHERE id = ?
+            LIMIT 1
+            """)
+        defer { sqlite3_finalize(statement) }
+        try bindText(id.uuidString, to: statement, at: 1)
+        guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
+        return try decodeCard(from: statement)
+    }
+
+    public func updateManagedCard(
+        id: UUID,
+        request: CardUpdateRequest
+    ) throws -> ManagedCard? {
+        let displayName = request.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let issuerCode = request.issuerCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lastFour = request.lastFour.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard
+            !displayName.isEmpty,
+            !issuerCode.isEmpty,
+            lastFour.count == 4,
+            lastFour.allSatisfy(\.isNumber),
+            request.performanceTargetAmount > 0
+        else {
+            throw ManagementStoreError.invalidInput
+        }
+
+        let statement = try prepare("""
+            UPDATE cards
+            SET display_name = ?, issuer_code = ?, last_four = ?,
+                performance_target_amount = ?
+            WHERE id = ?
+            """)
+        defer { sqlite3_finalize(statement) }
+        try bindText(displayName, to: statement, at: 1)
+        try bindText(issuerCode, to: statement, at: 2)
+        try bindText(lastFour, to: statement, at: 3)
+        try bindInt(request.performanceTargetAmount, to: statement, at: 4)
+        try bindText(id.uuidString, to: statement, at: 5)
+        guard sqlite3_step(statement) == SQLITE_DONE else {
+            throw SQLiteEventStoreError.statement(lastSQLiteMessage())
+        }
+        guard sqlite3_changes(connection.pointer) > 0 else { return nil }
+        return try managedCard(id: id)
+    }
+
+    public func managedTransactions(
+        scope: String? = nil,
+        cardID: UUID? = nil,
+        filter: String? = nil
+    ) throws -> [ManagedTransaction] {
+        var clauses: [String] = []
+        var bindings: [String] = []
+
+        if scope == "unreviewed" {
+            clauses.append("tr.transaction_id IS NULL")
+        } else if scope != nil {
+            throw ManagementStoreError.invalidInput
+        }
+        if let cardID {
+            clauses.append("tc.card_id = ?")
+            bindings.append(cardID.uuidString)
+        }
+        switch filter {
+        case nil, "all":
+            break
+        case "approval", "cancellation":
+            clauses.append("ct.transaction_kind = ?")
+            clauses.append("COALESCE(tr.aggregation_excluded, 0) = 0")
+            bindings.append(filter!)
+        case "excluded":
+            clauses.append("COALESCE(tr.aggregation_excluded, 0) = 1")
+        default:
+            throw ManagementStoreError.invalidInput
+        }
+
+        let whereClause = clauses.isEmpty ? "" : "WHERE " + clauses.joined(separator: " AND ")
+        let statement = try prepare("""
+            SELECT ct.id, tc.card_id, c.display_name, c.last_four,
+                   ct.captured_at, ct.month, ct.day, ct.hour, ct.minute,
+                   ct.parse_status, ct.transaction_kind, ct.amount, ct.merchant,
+                   tr.transaction_id, tr.performance, tr.memo,
+                   COALESCE(tr.aggregation_excluded, 0)
+            FROM canonical_transactions ct
+            JOIN transaction_cards tc ON tc.transaction_id = ct.id
+            JOIN cards c ON c.id = tc.card_id
+            LEFT JOIN transaction_reviews tr ON tr.transaction_id = ct.id
+            \(whereClause)
+            ORDER BY ct.captured_at DESC, ct.id DESC
+            """)
+        defer { sqlite3_finalize(statement) }
+        for (offset, value) in bindings.enumerated() {
+            try bindText(value, to: statement, at: Int32(offset + 1))
+        }
+        return try decodeManagedTransactions(from: statement)
+    }
+
+    public func managedTransaction(id: UUID) throws -> ManagedTransaction? {
+        let statement = try prepare("""
+            SELECT ct.id, tc.card_id, c.display_name, c.last_four,
+                   ct.captured_at, ct.month, ct.day, ct.hour, ct.minute,
+                   ct.parse_status, ct.transaction_kind, ct.amount, ct.merchant,
+                   tr.transaction_id, tr.performance, tr.memo,
+                   COALESCE(tr.aggregation_excluded, 0)
+            FROM canonical_transactions ct
+            JOIN transaction_cards tc ON tc.transaction_id = ct.id
+            JOIN cards c ON c.id = tc.card_id
+            LEFT JOIN transaction_reviews tr ON tr.transaction_id = ct.id
+            WHERE ct.id = ?
+            LIMIT 1
+            """)
+        defer { sqlite3_finalize(statement) }
+        try bindText(id.uuidString, to: statement, at: 1)
+        guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
+        return try decodeManagedTransaction(from: statement)
+    }
+
+    public func reviewTransaction(
+        id: UUID,
+        request: TransactionUpdateRequest
+    ) throws -> ManagedTransaction? {
+        guard let transaction = try managedTransaction(id: id) else { return nil }
+
+        let performance: PerformanceDecision?
+        let benefitIDs: [UUID]
+        if request.aggregationExcluded {
+            performance = nil
+            benefitIDs = []
+        } else {
+            performance = request.review.performance
+            guard performance != nil else {
+                throw ManagementStoreError.invalidInput
+            }
+            benefitIDs = Array(Set(request.review.benefitIds))
+            let allowedBenefitIDs = Set(try benefits(cardID: transaction.cardId).map(\.id))
+            guard benefitIDs.allSatisfy(allowedBenefitIDs.contains) else {
+                throw ManagementStoreError.invalidInput
+            }
+        }
+
+        try beginTransaction()
+        do {
+            let reviewStatement = try prepare("""
+                INSERT INTO transaction_reviews (
+                    transaction_id, performance, memo, aggregation_excluded, reviewed_at
+                ) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(transaction_id) DO UPDATE SET
+                    performance = excluded.performance,
+                    memo = excluded.memo,
+                    aggregation_excluded = excluded.aggregation_excluded,
+                    reviewed_at = excluded.reviewed_at
+                """)
+            defer { sqlite3_finalize(reviewStatement) }
+            try bindText(id.uuidString, to: reviewStatement, at: 1)
+            try bindOptionalText(performance?.rawValue, to: reviewStatement, at: 2)
+            try bindText(request.review.memo, to: reviewStatement, at: 3)
+            try bindInt(request.aggregationExcluded ? 1 : 0, to: reviewStatement, at: 4)
+            try bindDouble(Date().timeIntervalSince1970, to: reviewStatement, at: 5)
+            guard sqlite3_step(reviewStatement) == SQLITE_DONE else {
+                throw SQLiteEventStoreError.statement(lastSQLiteMessage())
+            }
+
+            let deleteStatement = try prepare(
+                "DELETE FROM transaction_benefits WHERE transaction_id = ?"
+            )
+            defer { sqlite3_finalize(deleteStatement) }
+            try bindText(id.uuidString, to: deleteStatement, at: 1)
+            guard sqlite3_step(deleteStatement) == SQLITE_DONE else {
+                throw SQLiteEventStoreError.statement(lastSQLiteMessage())
+            }
+
+            for benefitID in benefitIDs {
+                let insertStatement = try prepare("""
+                    INSERT INTO transaction_benefits (transaction_id, benefit_id)
+                    VALUES (?, ?)
+                    """)
+                defer { sqlite3_finalize(insertStatement) }
+                try bindText(id.uuidString, to: insertStatement, at: 1)
+                try bindText(benefitID.uuidString, to: insertStatement, at: 2)
+                guard sqlite3_step(insertStatement) == SQLITE_DONE else {
+                    throw SQLiteEventStoreError.statement(lastSQLiteMessage())
+                }
+            }
+            try commitTransaction()
+        } catch {
+            rollbackTransaction()
+            throw error
+        }
+        return try managedTransaction(id: id)
+    }
+
+    public func dashboard(cardID: UUID) throws -> CardDashboard? {
+        guard let card = try managedCard(id: cardID) else { return nil }
+        let transactions = try managedTransactions(cardID: cardID)
+        var performanceAmount = 0
+        var benefitAmounts = Dictionary(uniqueKeysWithValues: card.benefits.map { ($0.id, 0) })
+
+        for transaction in transactions where isInCurrentSeoulMonth(transaction.occurredAt) {
+            guard
+                transaction.reviewStatus == .reviewed,
+                !transaction.aggregationExcluded,
+                let amount = transaction.amount
+            else { continue }
+            let sign = transaction.kind == "cancellation" ? -1 : 1
+            if transaction.performance == .included {
+                performanceAmount += sign * amount
+            }
+            for benefitID in transaction.benefitIds {
+                guard let benefit = card.benefits.first(where: { $0.id == benefitID }) else {
+                    continue
+                }
+                benefitAmounts[benefitID, default: 0] += sign * amount * benefit.rateBasisPoints / 10_000
+            }
+        }
+
+        let progress = card.benefits.map { benefit in
+            BenefitProgress(
+                id: benefit.id,
+                label: benefit.label,
+                receivedAmount: max(0, min(benefit.maximumAmount, benefitAmounts[benefit.id, default: 0])),
+                maximumAmount: benefit.maximumAmount
+            )
+        }
+        return CardDashboard(
+            cardId: card.id,
+            performance: PerformanceProgress(
+                currentAmount: performanceAmount,
+                targetAmount: card.performanceTargetAmount
+            ),
+            benefits: progress
+        )
+    }
+
+    private func decodeCard(from statement: OpaquePointer) throws -> ManagedCard {
+        guard
+            let idText = columnString(statement, at: 0),
+            let id = UUID(uuidString: idText),
+            let displayName = columnString(statement, at: 1),
+            let issuerCode = columnString(statement, at: 2),
+            let lastFour = columnString(statement, at: 3)
+        else {
+            throw SQLiteEventStoreError.invalidStoredValue("managed card")
+        }
+        return ManagedCard(
+            id: id,
+            displayName: displayName,
+            issuerCode: issuerCode,
+            lastFour: lastFour,
+            performanceTargetAmount: Int(sqlite3_column_int64(statement, 4)),
+            benefits: try benefits(cardID: id)
+        )
+    }
+
+    private func benefits(cardID: UUID) throws -> [CardBenefit] {
+        let statement = try prepare("""
+            SELECT id, label, rate_basis_points, maximum_amount
+            FROM card_benefits
+            WHERE card_id = ?
+            ORDER BY sort_order ASC, id ASC
+            """)
+        defer { sqlite3_finalize(statement) }
+        try bindText(cardID.uuidString, to: statement, at: 1)
+
+        var values: [CardBenefit] = []
+        while true {
+            let result = sqlite3_step(statement)
+            if result == SQLITE_DONE { break }
+            guard
+                result == SQLITE_ROW,
+                let idText = columnString(statement, at: 0),
+                let id = UUID(uuidString: idText),
+                let label = columnString(statement, at: 1)
+            else {
+                throw SQLiteEventStoreError.invalidStoredValue("card benefit")
+            }
+            values.append(
+                CardBenefit(
+                    id: id,
+                    label: label,
+                    rateBasisPoints: Int(sqlite3_column_int64(statement, 2)),
+                    maximumAmount: Int(sqlite3_column_int64(statement, 3))
+                )
+            )
+        }
+        return values
+    }
+
+    private func decodeManagedTransactions(
+        from statement: OpaquePointer
+    ) throws -> [ManagedTransaction] {
+        var values: [ManagedTransaction] = []
+        while true {
+            let result = sqlite3_step(statement)
+            if result == SQLITE_DONE { break }
+            guard result == SQLITE_ROW else {
+                throw SQLiteEventStoreError.statement(lastSQLiteMessage())
+            }
+            values.append(try decodeManagedTransaction(from: statement))
+        }
+        return values
+    }
+
+    private func decodeManagedTransaction(
+        from statement: OpaquePointer
+    ) throws -> ManagedTransaction {
+        guard
+            let idText = columnString(statement, at: 0),
+            let id = UUID(uuidString: idText),
+            let cardIDText = columnString(statement, at: 1),
+            let cardID = UUID(uuidString: cardIDText),
+            let cardDisplayName = columnString(statement, at: 2),
+            let cardLastFour = columnString(statement, at: 3),
+            let parseStatusText = columnString(statement, at: 9),
+            let parseStatus = StoredParseStatus(rawValue: parseStatusText)
+        else {
+            throw SQLiteEventStoreError.invalidStoredValue("managed transaction")
+        }
+        let capturedAt = Date(timeIntervalSince1970: sqlite3_column_double(statement, 4))
+        let occurredAt = resolvedOccurredAt(
+            capturedAt: capturedAt,
+            month: nullableInt(statement, at: 5),
+            day: nullableInt(statement, at: 6),
+            hour: nullableInt(statement, at: 7),
+            minute: nullableInt(statement, at: 8)
+        )
+        let reviewStatus: TransactionReviewStatus = columnString(statement, at: 13) == nil
+            ? .unreviewed
+            : .reviewed
+        return ManagedTransaction(
+            id: id,
+            cardId: cardID,
+            cardDisplayName: cardDisplayName,
+            cardLastFour: cardLastFour,
+            capturedAt: capturedAt,
+            occurredAt: occurredAt,
+            parseStatus: parseStatus,
+            reviewStatus: reviewStatus,
+            kind: columnString(statement, at: 10),
+            amount: nullableInt(statement, at: 11),
+            merchant: columnString(statement, at: 12),
+            performance: columnString(statement, at: 14).flatMap(PerformanceDecision.init(rawValue:)),
+            benefitIds: try benefitIDs(transactionID: id),
+            memo: columnString(statement, at: 15) ?? "",
+            aggregationExcluded: sqlite3_column_int64(statement, 16) != 0
+        )
+    }
+
+    private func resolvedOccurredAt(
+        capturedAt: Date,
+        month: Int?,
+        day: Int?,
+        hour: Int?,
+        minute: Int?
+    ) -> Date {
+        guard
+            let month,
+            let day,
+            let partial = try? ParsedLocalDate(
+                month: month,
+                day: day,
+                hour: hour,
+                minute: minute,
+                timeZoneIdentifier: "Asia/Seoul"
+            ),
+            let resolved = try? DefaultTransactionDateResolver().resolve(
+                partial,
+                receivedAt: capturedAt
+            )
+        else {
+            return capturedAt
+        }
+        return resolved.instant
+    }
+
+    private func benefitIDs(transactionID: UUID) throws -> [UUID] {
+        let statement = try prepare("""
+            SELECT benefit_id
+            FROM transaction_benefits
+            WHERE transaction_id = ?
+            ORDER BY benefit_id ASC
+            """)
+        defer { sqlite3_finalize(statement) }
+        try bindText(transactionID.uuidString, to: statement, at: 1)
+        var values: [UUID] = []
+        while true {
+            let result = sqlite3_step(statement)
+            if result == SQLITE_DONE { break }
+            guard
+                result == SQLITE_ROW,
+                let value = columnString(statement, at: 0),
+                let id = UUID(uuidString: value)
+            else {
+                throw SQLiteEventStoreError.invalidStoredValue("transaction benefit")
+            }
+            values.append(id)
+        }
+        return values
+    }
+
+    private func isInCurrentSeoulMonth(_ date: Date) -> Bool {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Seoul")!
+        let now = calendar.dateComponents([.year, .month], from: Date())
+        let value = calendar.dateComponents([.year, .month], from: date)
+        return now.year == value.year && now.month == value.month
+    }
+
     private func transactionValue(id: UUID) throws -> StoredTransaction? {
         let statement = try prepare("""
             SELECT id, captured_at, original_message, parse_status,
@@ -322,6 +763,91 @@ public actor SQLiteEventStore {
                 rejection_reason TEXT,
                 FOREIGN KEY(transaction_id) REFERENCES canonical_transactions(id)
             )
+            """, database: database)
+        try execute("""
+            CREATE TABLE IF NOT EXISTS cards (
+                id TEXT PRIMARY KEY NOT NULL,
+                display_name TEXT NOT NULL,
+                issuer_code TEXT NOT NULL,
+                last_four TEXT NOT NULL,
+                performance_target_amount INTEGER NOT NULL,
+                created_at REAL NOT NULL
+            )
+            """, database: database)
+        try execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_last_four
+            ON cards(last_four)
+            """, database: database)
+        try execute("""
+            CREATE TABLE IF NOT EXISTS card_benefits (
+                id TEXT PRIMARY KEY NOT NULL,
+                card_id TEXT NOT NULL,
+                label TEXT NOT NULL,
+                rate_basis_points INTEGER NOT NULL,
+                maximum_amount INTEGER NOT NULL,
+                sort_order INTEGER NOT NULL,
+                FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE
+            )
+            """, database: database)
+        try execute("""
+            CREATE TABLE IF NOT EXISTS transaction_cards (
+                transaction_id TEXT PRIMARY KEY NOT NULL,
+                card_id TEXT NOT NULL,
+                FOREIGN KEY(transaction_id) REFERENCES canonical_transactions(id) ON DELETE CASCADE,
+                FOREIGN KEY(card_id) REFERENCES cards(id)
+            )
+            """, database: database)
+        try execute("""
+            CREATE TABLE IF NOT EXISTS transaction_reviews (
+                transaction_id TEXT PRIMARY KEY NOT NULL,
+                performance TEXT,
+                memo TEXT NOT NULL DEFAULT '',
+                aggregation_excluded INTEGER NOT NULL DEFAULT 0,
+                reviewed_at REAL NOT NULL,
+                FOREIGN KEY(transaction_id) REFERENCES canonical_transactions(id) ON DELETE CASCADE
+            )
+            """, database: database)
+        try execute("""
+            CREATE TABLE IF NOT EXISTS transaction_benefits (
+                transaction_id TEXT NOT NULL,
+                benefit_id TEXT NOT NULL,
+                PRIMARY KEY(transaction_id, benefit_id),
+                FOREIGN KEY(transaction_id) REFERENCES canonical_transactions(id) ON DELETE CASCADE,
+                FOREIGN KEY(benefit_id) REFERENCES card_benefits(id)
+            )
+            """, database: database)
+        try execute("""
+            INSERT OR IGNORE INTO cards (
+                id, display_name, issuer_code, last_four,
+                performance_target_amount, created_at
+            ) VALUES (
+                '\(defaultCardID.uuidString)', 'MG 더나은 체크카드', 'MG', '4775',
+                300000, 0
+            )
+            """, database: database)
+        try execute("""
+            INSERT OR IGNORE INTO card_benefits (
+                id, card_id, label, rate_basis_points, maximum_amount, sort_order
+            ) VALUES (
+                '\(coffeeBenefitID.uuidString)', '\(defaultCardID.uuidString)',
+                '커피 10% 할인', 1000, 5000, 0
+            )
+            """, database: database)
+        try execute("""
+            INSERT OR IGNORE INTO card_benefits (
+                id, card_id, label, rate_basis_points, maximum_amount, sort_order
+            ) VALUES (
+                '\(convenienceBenefitID.uuidString)', '\(defaultCardID.uuidString)',
+                '편의점 5% 할인', 500, 5000, 1
+            )
+            """, database: database)
+        try execute("""
+            INSERT OR IGNORE INTO transaction_cards (transaction_id, card_id)
+            SELECT ct.id, COALESCE(
+                (SELECT c.id FROM cards c WHERE c.last_four = ct.card_last4 LIMIT 1),
+                '\(defaultCardID.uuidString)'
+            )
+            FROM canonical_transactions ct
             """, database: database)
         try execute("""
             CREATE INDEX IF NOT EXISTS idx_transactions_fingerprint_captured_at
@@ -414,6 +940,42 @@ public actor SQLiteEventStore {
         }
         try bindText(id.uuidString, to: statement, at: 14)
 
+        guard sqlite3_step(statement) == SQLITE_DONE else {
+            throw SQLiteEventStoreError.statement(lastSQLiteMessage())
+        }
+    }
+
+    private func assignCard(transactionID: UUID, parseResult: ParseResult) throws {
+        let parsedLastFour: String?
+        if case let .success(transaction) = parseResult {
+            parsedLastFour = transaction.cardLast4
+        } else {
+            parsedLastFour = nil
+        }
+
+        var cardID = Self.defaultCardID
+        if let parsedLastFour {
+            let cardStatement = try prepare("""
+                SELECT id FROM cards WHERE last_four = ? LIMIT 1
+                """)
+            defer { sqlite3_finalize(cardStatement) }
+            try bindText(parsedLastFour, to: cardStatement, at: 1)
+            if
+                sqlite3_step(cardStatement) == SQLITE_ROW,
+                let value = columnString(cardStatement, at: 0),
+                let matchedID = UUID(uuidString: value)
+            {
+                cardID = matchedID
+            }
+        }
+
+        let statement = try prepare("""
+            INSERT OR REPLACE INTO transaction_cards (transaction_id, card_id)
+            VALUES (?, ?)
+            """)
+        defer { sqlite3_finalize(statement) }
+        try bindText(transactionID.uuidString, to: statement, at: 1)
+        try bindText(cardID.uuidString, to: statement, at: 2)
         guard sqlite3_step(statement) == SQLITE_DONE else {
             throw SQLiteEventStoreError.statement(lastSQLiteMessage())
         }

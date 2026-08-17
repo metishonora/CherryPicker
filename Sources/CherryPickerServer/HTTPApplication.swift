@@ -55,17 +55,177 @@ public struct CherryPickerHTTPApplication {
             }
         }
 
+        router.get("/api/v1/cards") { request, _ async -> EditedResponse<String> in
+            guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
+                return Self.unauthorizedResponse()
+            }
+            do {
+                return Self.jsonResponse(
+                    status: .ok,
+                    data: try codec.encode(
+                        CardsResponse(cards: try await store.managedCards())
+                    )
+                )
+            } catch {
+                return Self.internalErrorResponse()
+            }
+        }
+
+        router.put("/api/v1/cards/:id") { request, context async -> EditedResponse<String> in
+            guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
+                return Self.unauthorizedResponse()
+            }
+            guard Self.hasValidCSRFHeader(request) else {
+                return Self.forbiddenResponse()
+            }
+            guard let id = context.parameters.get("id", as: UUID.self) else {
+                return Self.badRequestResponse()
+            }
+            do {
+                let body = try await request.body.collect(upTo: Self.maxBatchBodyBytes)
+                let update = try codec.decode(
+                    CardUpdateRequest.self,
+                    from: Data(body.readableBytesView)
+                )
+                guard let card = try await store.updateManagedCard(id: id, request: update) else {
+                    return Self.notFoundResponse()
+                }
+                return Self.jsonResponse(
+                    status: .ok,
+                    data: try codec.encode(CardResponse(card: card))
+                )
+            } catch ManagementStoreError.invalidInput {
+                return Self.badRequestResponse()
+            } catch is DecodingError {
+                return Self.badRequestResponse()
+            } catch {
+                return Self.internalErrorResponse()
+            }
+        }
+
+        router.get("/api/v1/cards/:id/transactions") { request, context async -> EditedResponse<String> in
+            guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
+                return Self.unauthorizedResponse()
+            }
+            guard let id = context.parameters.get("id", as: UUID.self) else {
+                return Self.badRequestResponse()
+            }
+            let filter = request.uri.queryParameters["filter"].map(String.init)
+            do {
+                guard try await store.managedCard(id: id) != nil else {
+                    return Self.notFoundResponse()
+                }
+                let transactions = try await store.managedTransactions(
+                    cardID: id,
+                    filter: filter
+                )
+                return Self.jsonResponse(
+                    status: .ok,
+                    data: try codec.encode(TransactionsResponse(transactions: transactions))
+                )
+            } catch ManagementStoreError.invalidInput {
+                return Self.badRequestResponse()
+            } catch {
+                return Self.internalErrorResponse()
+            }
+        }
+
+        router.get("/api/v1/cards/:id/dashboard") { request, context async -> EditedResponse<String> in
+            guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
+                return Self.unauthorizedResponse()
+            }
+            guard let id = context.parameters.get("id", as: UUID.self) else {
+                return Self.badRequestResponse()
+            }
+            do {
+                guard let dashboard = try await store.dashboard(cardID: id) else {
+                    return Self.notFoundResponse()
+                }
+                return Self.jsonResponse(
+                    status: .ok,
+                    data: try codec.encode(DashboardResponse(dashboard: dashboard))
+                )
+            } catch {
+                return Self.internalErrorResponse()
+            }
+        }
+
         router.get("/api/v1/transactions") { request, _ async -> EditedResponse<String> in
             guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
                 return Self.unauthorizedResponse()
             }
 
             do {
+                if let scope = request.uri.queryParameters["scope"].map(String.init) {
+                    let transactions = try await store.managedTransactions(scope: scope)
+                    return Self.jsonResponse(
+                        status: .ok,
+                        data: try codec.encode(TransactionsResponse(transactions: transactions))
+                    )
+                }
                 let transactions = try await store.safeTransactions()
-                let responseData = try codec.encode(
-                    SafeTransactionsResponse(transactions: transactions)
+                return Self.jsonResponse(
+                    status: .ok,
+                    data: try codec.encode(SafeTransactionsResponse(transactions: transactions))
                 )
-                return Self.jsonResponse(status: .ok, data: responseData)
+            } catch ManagementStoreError.invalidInput {
+                return Self.badRequestResponse()
+            } catch {
+                return Self.internalErrorResponse()
+            }
+        }
+
+        router.get("/api/v1/transactions/:id") { request, context async -> EditedResponse<String> in
+            guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
+                return Self.unauthorizedResponse()
+            }
+            guard let id = context.parameters.get("id", as: UUID.self) else {
+                return Self.badRequestResponse()
+            }
+            do {
+                guard let transaction = try await store.managedTransaction(id: id) else {
+                    return Self.notFoundResponse()
+                }
+                return Self.jsonResponse(
+                    status: .ok,
+                    data: try codec.encode(TransactionResponse(transaction: transaction))
+                )
+            } catch {
+                return Self.internalErrorResponse()
+            }
+        }
+
+        router.patch("/api/v1/transactions/:id") { request, context async -> EditedResponse<String> in
+            guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
+                return Self.unauthorizedResponse()
+            }
+            guard Self.hasValidCSRFHeader(request) else {
+                return Self.forbiddenResponse()
+            }
+            guard let id = context.parameters.get("id", as: UUID.self) else {
+                return Self.badRequestResponse()
+            }
+            do {
+                let body = try await request.body.collect(upTo: Self.maxBatchBodyBytes)
+                let data = Data(body.readableBytesView)
+                guard
+                    let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                    object["effectiveValues"] == nil
+                else {
+                    return Self.badRequestResponse()
+                }
+                let update = try codec.decode(TransactionUpdateRequest.self, from: data)
+                guard let transaction = try await store.reviewTransaction(id: id, request: update) else {
+                    return Self.notFoundResponse()
+                }
+                return Self.jsonResponse(
+                    status: .ok,
+                    data: try codec.encode(TransactionResponse(transaction: transaction))
+                )
+            } catch ManagementStoreError.invalidInput {
+                return Self.badRequestResponse()
+            } catch is DecodingError {
+                return Self.badRequestResponse()
             } catch {
                 return Self.internalErrorResponse()
             }
@@ -79,7 +239,9 @@ public struct CherryPickerHTTPApplication {
             do {
                 let transactions = try await store.safeTransactions()
                 let receipts = try await store.safeEventReceipts()
-                return Self.htmlResponse(Self.renderHTML(transactions, receipts: receipts))
+                return Self.htmlResponse(
+                    ProductWebPage.render(transactions: transactions, receipts: receipts)
+                )
             } catch {
                 return Self.internalErrorResponse()
             }
@@ -116,6 +278,14 @@ public struct CherryPickerHTTPApplication {
         jsonResponse(status: .unauthorized, data: Data(#"{"error":"unauthorized"}"#.utf8))
     }
 
+    private static func forbiddenResponse() -> EditedResponse<String> {
+        jsonResponse(status: .forbidden, data: Data(#"{"error":"forbidden"}"#.utf8))
+    }
+
+    private static func notFoundResponse() -> EditedResponse<String> {
+        jsonResponse(status: .notFound, data: Data(#"{"error":"not_found"}"#.utf8))
+    }
+
     private static func badRequestResponse() -> EditedResponse<String> {
         jsonResponse(status: .badRequest, data: Data(#"{"error":"bad_request"}"#.utf8))
     }
@@ -142,64 +312,8 @@ public struct CherryPickerHTTPApplication {
         request.headers[.init("Tailscale-User-Login")!]
     }
 
-    private static func renderHTML(
-        _ transactions: [SafeTransaction],
-        receipts: [SafeEventReceipt]
-    ) -> String {
-        let dateFormatter = ISO8601DateFormatter()
-        let rows = transactions.map { transaction in
-            let id = htmlEscape(transaction.id.uuidString)
-            let capturedAt = htmlEscape(dateFormatter.string(from: transaction.capturedAt))
-            let parseStatus = htmlEscape(transaction.parseStatus.rawValue)
-            let kind = htmlEscape(transaction.summary.kind ?? "review-needed")
-            let amount = transaction.summary.amount.map(String.init).map(htmlEscape) ?? "—"
-            let merchant = htmlEscape(transaction.summary.merchant ?? "—")
-            let review = transaction.summary.reviewNeeded ? "review-needed" : "ready"
-            return """
-            <li data-transaction-id="\(id)">
-              <span class="captured-at">\(capturedAt)</span>
-              <span class="parse-status">parseStatus: \(parseStatus)</span>
-              <span class="summary">summary: kind=\(kind), amount=\(amount), merchant=\(merchant), \(review)</span>
-            </li>
-            """
-        }.joined()
-        let syncRows = receipts.map { receipt in
-            let eventID = htmlEscape(receipt.eventId.uuidString)
-            let transactionID = htmlEscape(receipt.transactionID.uuidString)
-            let capturedAt = htmlEscape(dateFormatter.string(from: receipt.capturedAt))
-            let status = htmlEscape(receipt.status.rawValue)
-            let disposition = receipt.disposition.map { htmlEscape($0.rawValue) } ?? "—"
-            return """
-            <li data-event-id="\(eventID)">
-              <span class="sync-captured-at">\(capturedAt)</span>
-              <span class="sync-result">syncResult: status=\(status), disposition=\(disposition), transactionId=\(transactionID)</span>
-            </li>
-            """
-        }.joined()
-
-        return """
-        <!doctype html>
-        <html lang="en">
-          <head><meta charset="utf-8"><title>CherryPicker</title></head>
-          <body>
-            <h1>Transactions</h1>
-            <p>parseStatus and summary</p>
-            <ul>\(rows)</ul>
-            <section id="sync-results">
-              <h2>syncResult</h2>
-              <ul>\(syncRows)</ul>
-            </section>
-          </body>
-        </html>
-        """
+    private static func hasValidCSRFHeader(_ request: Request) -> Bool {
+        request.headers[.init("X-CherryPicker-CSRF")!] == "same-origin"
     }
 
-    private static func htmlEscape(_ value: String) -> String {
-        value
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-            .replacingOccurrences(of: "\"", with: "&quot;")
-            .replacingOccurrences(of: "'", with: "&#39;")
-    }
 }
