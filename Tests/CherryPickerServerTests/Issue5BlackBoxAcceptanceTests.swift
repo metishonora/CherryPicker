@@ -10,9 +10,8 @@ import HummingbirdTesting
 ///
 /// The suite constructs the real HTTP application, then observes only HTTP
 /// requests and responses. It does not read SQLite tables or call store query
-/// and mutation methods. The proposed management routes intentionally do not
-/// exist yet, so this suite should compile and fail at the HTTP boundary until
-/// the approved product behavior is implemented.
+/// and mutation methods. These tests are the executable acceptance boundary
+/// for the approved Issue #5 product behavior.
 @available(macOS 14.0, *)
 final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
     private let allowedLogin = "fixture-device@example.test"
