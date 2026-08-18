@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CherryPicker · MG 혜택 표현 프로토타입</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <aside class="review-bar" aria-label="프로토타입 검토 도구">
+    <div>
+      <strong>Issue #9 혜택 표현</strong>
+      <span>합성 데이터 · 제품 화면 아님</span>
+    </div>
+    <div class="review-tabs" role="group" aria-label="검토 화면 선택">
+      <button type="button" data-show="dashboard" aria-pressed="true">월 현황</button>
+      <button type="button" data-show="review" aria-pressed="false">거래 검토</button>
+    </div>
+  </aside>
+
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="brand">
+        <strong>CherryPicker</strong>
+        <span>혜택을 놓치지 않게</span>
+      </div>
+      <button class="card-select" type="button" aria-label="카드 선택">
+        <span>MG 더나은 체크카드</span>
+        <small>1234</small>
+        <span aria-hidden="true">⌄</span>
+      </button>
+    </header>
+
+    <nav class="product-nav" aria-label="주요 메뉴">
+      <button type="button" data-view="dashboard" aria-current="page">현황</button>
+      <button type="button" data-view="review">거래 검토</button>
+      <button type="button">거래 내역</button>
+      <button type="button">카드 설정</button>
+    </nav>
+
+    <main>
+      <section id="dashboard-view">
+        <div class="page-heading">
+          <p class="eyebrow">2026년 8월</p>
+          <h1>이번 달 카드 현황</h1>
+          <p>확인한 거래를 기준으로 실적과 캐시백을 계산했어요.</p>
+        </div>
+
+        <section class="panel performance-panel" aria-labelledby="performance-title">
+          <div class="panel-head">
+            <div>
+              <p class="section-kicker">월 실적</p>
+              <h2 id="performance-title"><strong>214,500원</strong><span> / 300,000원</span></h2>
+            </div>
+            <span class="status-chip">71%</span>
+          </div>
+          <div class="progress" role="progressbar" aria-label="월 실적 진행도" aria-valuemin="0" aria-valuemax="300000" aria-valuenow="214500"><span style="width:71.5%"></span></div>
+          <p class="remaining">목표까지 <strong>85,500원</strong> 남았어요</p>
+          <p class="basis">산정 기준 · ‘더나은’ 정상 이용금액</p>
+          <details class="policy">
+            <summary><span>실적 제외 항목</span><span>2개 <b aria-hidden="true">⌄</b></span></summary>
+            <ul>
+              <li>해외가맹점 이용금액(CD·ATM 인출 포함)</li>
+              <li>소액신용결제 및 후불교통 이용금액</li>
+            </ul>
+          </details>
+        </section>
+
+        <section class="panel" aria-labelledby="benefits-title">
+          <div class="panel-head compact">
+            <div>
+              <p class="section-kicker">이번 달 캐시백</p>
+              <h2 id="benefits-title">혜택별 받은 금액</h2>
+            </div>
+            <span class="panel-note">미확인 1건</span>
+          </div>
+
+          <div class="benefit-stack">
+            <article class="benefit-card">
+              <div class="benefit-title">
+                <div class="benefit-icon pay" aria-hidden="true">P</div>
+                <div><h3>간편결제 20% 할인캐시백</h3><p>건당 10,000원 이상</p></div>
+                <strong>4,000원 <small>/ 6,000원</small></strong>
+              </div>
+              <div class="progress small" role="progressbar" aria-label="간편결제 캐시백" aria-valuemin="0" aria-valuemax="6000" aria-valuenow="4000"><span style="width:66.7%"></span></div>
+              <details class="benefit-detail">
+                <summary>대상과 조건 보기 <span aria-hidden="true">⌄</span></summary>
+                <p><b>대상</b> 네이버페이 · 카카오페이 · 페이코</p>
+                <p><b>조건</b> 전월 실적 300,000원 이상 · 월 6,000원 한도</p>
+              </details>
+            </article>
+
+            <article class="benefit-card">
+              <div class="benefit-title">
+                <div class="benefit-icon shop" aria-hidden="true">S</div>
+                <div><h3>온라인 쇼핑 20% 할인캐시백</h3><p>건당 10,000원 이상</p></div>
+                <strong>0원 <small>/ 6,000원</small></strong>
+              </div>
+              <div class="progress small" role="progressbar" aria-label="온라인 쇼핑 캐시백" aria-valuemin="0" aria-valuemax="6000" aria-valuenow="0"><span style="width:0"></span></div>
+              <details class="benefit-detail">
+                <summary>대상과 조건 보기 <span aria-hidden="true">⌄</span></summary>
+                <p><b>대상</b> 쿠팡 · 무신사 · 지그재그 · W컨셉 · 에이블리</p>
+                <p><b>조건</b> 전월 실적 300,000원 이상 · 월 6,000원 한도</p>
+              </details>
+            </article>
+
+            <article class="benefit-card">
+              <div class="benefit-title">
+                <div class="benefit-icon coffee" aria-hidden="true">C</div>
+                <div><h3>커피 20% 할인캐시백</h3><p>건당 5,000원 이상</p></div>
+                <strong>2,000원 <small>/ 6,000원</small></strong>
+              </div>
+              <div class="progress small" role="progressbar" aria-label="커피 캐시백" aria-valuemin="0" aria-valuemax="6000" aria-valuenow="2000"><span style="width:33.3%"></span></div>
+              <details class="benefit-detail">
+                <summary>대상과 조건 보기 <span aria-hidden="true">⌄</span></summary>
+                <p><b>대상</b> 스타벅스 · 투썸플레이스 · 커피빈 · 메가커피 · 빽다방 · 컴포즈커피</p>
+                <p><b>조건</b> 전월 실적 300,000원 이상 · 월 6,000원 한도</p>
+                <p><b>제외</b> 백화점·할인점·아울렛·쇼핑몰·공항·호텔 등 입점매장</p>
+              </details>
+            </article>
+          </div>
+
+          <details class="policy benefit-policy">
+            <summary><span>할인캐시백 공통 제외 항목</span><span>10개 <b aria-hidden="true">⌄</b></span></summary>
+            <ul>
+              <li>해외가맹점 이용금액(CD·ATM 인출 포함)</li>
+              <li>소액신용결제 및 후불교통 이용금액</li>
+              <li>국세·지방세·관세·공공요금</li>
+              <li>공공기관 운영시설</li>
+              <li>상품권, 포인트 및 적립금 충전</li>
+              <li>선불카드 구매·충전·이용(선불교통카드 포함)</li>
+              <li>MD상품 구입</li>
+              <li>대학·대학원 등록금</li>
+              <li>택시·대중교통 이용금액(버스·철도 포함)</li>
+              <li>자동차 판매 업종</li>
+            </ul>
+          </details>
+        </section>
+      </section>
+
+      <section id="review-view" hidden>
+        <button class="back-button" type="button" data-view="dashboard">‹ 현황으로</button>
+        <div class="page-heading review-heading">
+          <p class="eyebrow">합성 거래 · 확인 필요</p>
+          <h1>네이버페이</h1>
+          <p class="transaction-amount">12,500원</p>
+          <dl class="facts">
+            <div><dt>카드</dt><dd>MG 더나은 체크카드 · 1234</dd></div>
+            <div><dt>거래 일시</dt><dd>8월 18일 오후 2:25</dd></div>
+            <div><dt>거래 종류</dt><dd>승인</dd></div>
+          </dl>
+        </div>
+
+        <div class="exclude-row">
+          <div><strong>이 거래를 집계하지 않음</strong><span>실적과 혜택 계산에서 모두 제외해요.</span></div>
+          <label class="switch"><input id="exclude-toggle" type="checkbox"><span></span></label>
+        </div>
+
+        <section class="panel review-panel" id="review-form" aria-labelledby="review-title">
+          <div class="panel-head compact"><div><p class="section-kicker">검토</p><h2 id="review-title">이 거래의 판정</h2></div></div>
+
+          <fieldset>
+            <legend>실적</legend>
+            <div class="choice-grid">
+              <label class="choice"><input type="radio" name="performance" value="included" checked><span>인정</span></label>
+              <label class="choice"><input type="radio" name="performance" value="excluded"><span>제외</span></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="benefit-choices">
+            <legend>해당 혜택</legend>
+            <p class="legend-note">실제 적용된 혜택을 직접 선택해 주세요.</p>
+
+            <label class="benefit-choice" data-benefit="pay" data-base="1500">
+              <input type="checkbox" checked>
+              <span class="choice-content">
+                <span class="choice-title"><b>간편결제 20% 할인캐시백</b><em>사용처 일치</em></span>
+                <span>네이버페이 · 카카오페이 · 페이코</span>
+                <small>건당 10,000원 이상 · 전월 실적 300,000원 이상</small>
+                <span class="choice-preview">이번 거래 2,500원 · 월 누적 <strong>4,000원 / 6,000원</strong></span>
+              </span>
+            </label>
+
+            <label class="benefit-choice" data-benefit="shopping" data-base="0">
+              <input type="checkbox">
+              <span class="choice-content">
+                <span class="choice-title"><b>온라인 쇼핑 20% 할인캐시백</b></span>
+                <span>쿠팡 · 무신사 · 지그재그 · W컨셉 · 에이블리</span>
+                <small>건당 10,000원 이상 · 전월 실적 300,000원 이상</small>
+                <span class="choice-preview" hidden>이번 거래 2,500원 · 월 누적 <strong>2,500원 / 6,000원</strong></span>
+              </span>
+            </label>
+
+            <label class="benefit-choice" data-benefit="coffee" data-base="2000">
+              <input type="checkbox">
+              <span class="choice-content">
+                <span class="choice-title"><b>커피 20% 할인캐시백</b></span>
+                <span>스타벅스 · 투썸플레이스 · 커피빈 외</span>
+                <small>건당 5,000원 이상 · 입점매장 제외</small>
+                <span class="choice-preview" hidden>이번 거래 2,500원 · 월 누적 <strong>4,500원 / 6,000원</strong></span>
+              </span>
+            </label>
+          </fieldset>
+
+          <label class="memo-field"><span>메모</span><textarea rows="3" placeholder="필요한 내용을 남겨두세요"></textarea></label>
+          <div class="actions"><button class="secondary" type="button" data-view="dashboard">취소</button><button id="save-review" class="primary" type="button">저장하고 확인</button></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" role="status" hidden>거래 검토를 저장했어요</div>
+  <script src="app.js"></script>
+</body>
+</html>
