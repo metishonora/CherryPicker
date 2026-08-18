@@ -3,21 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CherryPicker · MG 혜택 표현 프로토타입</title>
+  <title>CherryPicker · 카드 현황</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <aside class="review-bar" aria-label="프로토타입 검토 도구">
-    <div>
-      <strong>Issue #9 혜택 표현</strong>
-      <span>합성 데이터 · 제품 화면 아님</span>
-    </div>
-    <div class="review-tabs" role="group" aria-label="검토 화면 선택">
-      <button type="button" data-show="dashboard" aria-pressed="true">월 현황</button>
-      <button type="button" data-show="review" aria-pressed="false">거래 검토</button>
-    </div>
-  </aside>
-
   <div class="app-shell">
     <header class="app-header">
       <div class="brand">
@@ -52,11 +41,8 @@
               <p class="section-kicker">월 실적</p>
               <h2 id="performance-title"><strong>214,500원</strong><span> / 300,000원</span></h2>
             </div>
-            <span class="status-chip">71%</span>
           </div>
           <div class="progress" role="progressbar" aria-label="월 실적 진행도" aria-valuemin="0" aria-valuemax="300000" aria-valuenow="214500"><span style="width:71.5%"></span></div>
-          <p class="remaining">목표까지 <strong>85,500원</strong> 남았어요</p>
-          <p class="basis">산정 기준 · ‘더나은’ 정상 이용금액</p>
           <details class="policy">
             <summary><span>실적 제외 항목</span><span>2개 <b aria-hidden="true">⌄</b></span></summary>
             <ul>
@@ -78,7 +64,6 @@
           <div class="benefit-stack">
             <article class="benefit-card">
               <div class="benefit-title">
-                <div class="benefit-icon pay" aria-hidden="true">P</div>
                 <div><h3>간편결제 20% 할인캐시백</h3><p>건당 10,000원 이상</p></div>
                 <strong>4,000원 <small>/ 6,000원</small></strong>
               </div>
@@ -92,7 +77,6 @@
 
             <article class="benefit-card">
               <div class="benefit-title">
-                <div class="benefit-icon shop" aria-hidden="true">S</div>
                 <div><h3>온라인 쇼핑 20% 할인캐시백</h3><p>건당 10,000원 이상</p></div>
                 <strong>0원 <small>/ 6,000원</small></strong>
               </div>
@@ -106,7 +90,6 @@
 
             <article class="benefit-card">
               <div class="benefit-title">
-                <div class="benefit-icon coffee" aria-hidden="true">C</div>
                 <div><h3>커피 20% 할인캐시백</h3><p>건당 5,000원 이상</p></div>
                 <strong>2,000원 <small>/ 6,000원</small></strong>
               </div>
