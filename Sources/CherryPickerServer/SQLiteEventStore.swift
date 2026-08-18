@@ -38,17 +38,15 @@ private final class SQLiteConnection: @unchecked Sendable {
 /// Actor-isolated, disk-backed event and canonical-transaction store.
 public actor SQLiteEventStore {
     private static let defaultCardID = UUID(uuidString: "00000000-0000-0000-0000-000000004775")!
-    private static let coffeeBenefitID = UUID(uuidString: "00000000-0000-0000-0001-000000004775")!
-    private static let convenienceBenefitID = UUID(uuidString: "00000000-0000-0000-0002-000000004775")!
 
     private let connection: SQLiteConnection
-    private let parser: MGCardMessageParser
+    private let cardType: any CardTypeDefining
 
     public init(
         databaseURL: URL,
-        parser: MGCardMessageParser = MGCardMessageParser()
+        cardType: any CardTypeDefining = MGTheBetterCheckCardDefinition()
     ) throws {
-        self.parser = parser
+        self.cardType = cardType
 
         var opened: OpaquePointer?
         let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
@@ -61,7 +59,7 @@ public actor SQLiteEventStore {
         }
         let connection = SQLiteConnection(pointer: opened)
         self.connection = connection
-        try Self.configureAndCreateSchema(database: opened)
+        try Self.configureAndCreateSchema(database: opened, cardType: cardType)
     }
 
     // MARK: - Ingestion
@@ -129,7 +127,7 @@ public actor SQLiteEventStore {
                 event: event,
                 fingerprint: fingerprint
             )
-            let parseResult = parser.parse(event.originalMessage)
+            let parseResult = cardType.parse(event.originalMessage)
             try updateTransaction(id: transactionID, parseResult: parseResult)
             try assignCard(transactionID: transactionID, parseResult: parseResult)
             let disposition: SyncDisposition
@@ -277,7 +275,7 @@ public actor SQLiteEventStore {
 
     public func managedCards() throws -> [ManagedCard] {
         let statement = try prepare("""
-            SELECT id, display_name, issuer_code, last_four, performance_target_amount
+            SELECT id, card_type_code, display_name, last_four, performance_target_amount
             FROM cards
             ORDER BY created_at ASC, id ASC
             """)
@@ -297,7 +295,7 @@ public actor SQLiteEventStore {
 
     public func managedCard(id: UUID) throws -> ManagedCard? {
         let statement = try prepare("""
-            SELECT id, display_name, issuer_code, last_four, performance_target_amount
+            SELECT id, card_type_code, display_name, last_four, performance_target_amount
             FROM cards
             WHERE id = ?
             LIMIT 1
@@ -313,11 +311,9 @@ public actor SQLiteEventStore {
         request: CardUpdateRequest
     ) throws -> ManagedCard? {
         let displayName = request.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let issuerCode = request.issuerCode.trimmingCharacters(in: .whitespacesAndNewlines)
         let lastFour = request.lastFour.trimmingCharacters(in: .whitespacesAndNewlines)
         guard
             !displayName.isEmpty,
-            !issuerCode.isEmpty,
             lastFour.count == 4,
             lastFour.allSatisfy(\.isNumber),
             request.performanceTargetAmount > 0
@@ -327,16 +323,14 @@ public actor SQLiteEventStore {
 
         let statement = try prepare("""
             UPDATE cards
-            SET display_name = ?, issuer_code = ?, last_four = ?,
-                performance_target_amount = ?
+            SET display_name = ?, last_four = ?, performance_target_amount = ?
             WHERE id = ?
             """)
         defer { sqlite3_finalize(statement) }
         try bindText(displayName, to: statement, at: 1)
-        try bindText(issuerCode, to: statement, at: 2)
-        try bindText(lastFour, to: statement, at: 3)
-        try bindInt(request.performanceTargetAmount, to: statement, at: 4)
-        try bindText(id.uuidString, to: statement, at: 5)
+        try bindText(lastFour, to: statement, at: 2)
+        try bindInt(request.performanceTargetAmount, to: statement, at: 3)
+        try bindText(id.uuidString, to: statement, at: 4)
         guard sqlite3_step(statement) == SQLITE_DONE else {
             throw SQLiteEventStoreError.statement(lastSQLiteMessage())
         }
@@ -441,7 +435,9 @@ public actor SQLiteEventStore {
                 throw ManagementStoreError.invalidInput
             }
             benefitIDs = Array(Set(request.review.benefitIds))
-            let allowedBenefitIDs = Set(try benefits(cardID: transaction.cardId).map(\.id))
+            let allowedBenefitIDs = Set(
+                try managedCard(id: transaction.cardId)?.benefits.map(\.id) ?? []
+            )
             guard benefitIDs.allSatisfy(allowedBenefitIDs.contains) else {
                 throw ManagementStoreError.invalidInput
             }
@@ -558,78 +554,36 @@ public actor SQLiteEventStore {
         guard
             let idText = columnString(statement, at: 0),
             let id = UUID(uuidString: idText),
-            let displayName = columnString(statement, at: 1),
-            let issuerCode = columnString(statement, at: 2),
+            let cardTypeCode = columnString(statement, at: 1),
+            cardTypeCode == cardType.code,
+            let displayName = columnString(statement, at: 2),
             let lastFour = columnString(statement, at: 3)
         else {
             throw SQLiteEventStoreError.invalidStoredValue("managed card")
         }
         return ManagedCard(
             id: id,
+            cardTypeCode: cardTypeCode,
             displayName: displayName,
-            issuerCode: issuerCode,
+            issuerCode: cardType.issuerCode,
             lastFour: lastFour,
             performanceTargetAmount: Int(sqlite3_column_int64(statement, 4)),
-            benefits: try benefits(cardID: id),
-            performanceExclusions: try exclusions(cardID: id, kind: "performance"),
-            benefitExclusions: try exclusions(cardID: id, kind: "benefit")
+            benefits: benefits(cardTypeCode: cardTypeCode),
+            performanceExclusions: cardType.performanceExclusions,
+            benefitExclusions: cardType.benefitExclusions
         )
     }
 
-    private func exclusions(cardID: UUID, kind: String) throws -> [String] {
-        let statement = try prepare("""
-            SELECT label
-            FROM card_exclusions
-            WHERE card_id = ? AND kind = ?
-            ORDER BY sort_order ASC
-            """)
-        defer { sqlite3_finalize(statement) }
-        try bindText(cardID.uuidString, to: statement, at: 1)
-        try bindText(kind, to: statement, at: 2)
-        var values: [String] = []
-        while true {
-            let result = sqlite3_step(statement)
-            if result == SQLITE_DONE { break }
-            guard result == SQLITE_ROW, let label = columnString(statement, at: 0) else {
-                throw SQLiteEventStoreError.invalidStoredValue("card exclusion")
-            }
-            values.append(label)
-        }
-        return values
-    }
-
-    private func benefits(cardID: UUID) throws -> [CardBenefit] {
-        let statement = try prepare("""
-            SELECT id, label, rate_basis_points, maximum_amount
-            FROM card_benefits
-            WHERE card_id = ?
-            ORDER BY sort_order ASC, id ASC
-            """)
-        defer { sqlite3_finalize(statement) }
-        try bindText(cardID.uuidString, to: statement, at: 1)
-
-        var values: [CardBenefit] = []
-        while true {
-            let result = sqlite3_step(statement)
-            if result == SQLITE_DONE { break }
-            guard
-                result == SQLITE_ROW,
-                let idText = columnString(statement, at: 0),
-                let id = UUID(uuidString: idText),
-                let label = columnString(statement, at: 1)
-            else {
-                throw SQLiteEventStoreError.invalidStoredValue("card benefit")
-            }
-            values.append(
-                CardBenefit(
-                    id: id,
-                    label: label,
-                    rateBasisPoints: Int(sqlite3_column_int64(statement, 2)),
-                    maximumAmount: Int(sqlite3_column_int64(statement, 3))
-                )
+    private func benefits(cardTypeCode: String) -> [CardBenefit] {
+        guard cardTypeCode == cardType.code else { return [] }
+        return cardType.benefits.map {
+            CardBenefit(
+                id: $0.id,
+                label: $0.label,
+                rateBasisPoints: $0.rateBasisPoints,
+                maximumAmount: $0.monthlyMaximumAmount
             )
         }
-        return values
     }
 
     private func decodeManagedTransactions(
@@ -766,7 +720,10 @@ public actor SQLiteEventStore {
 
     // MARK: - Schema and transaction boundaries
 
-    private static func configureAndCreateSchema(database: OpaquePointer) throws {
+    private static func configureAndCreateSchema(
+        database: OpaquePointer,
+        cardType: any CardTypeDefining
+    ) throws {
         try execute("PRAGMA foreign_keys = ON", database: database)
         try execute("PRAGMA busy_timeout = 5000", database: database)
         try execute("PRAGMA journal_mode = WAL", database: database)
@@ -806,6 +763,7 @@ public actor SQLiteEventStore {
         try execute("""
             CREATE TABLE IF NOT EXISTS cards (
                 id TEXT PRIMARY KEY NOT NULL,
+                card_type_code TEXT NOT NULL,
                 display_name TEXT NOT NULL,
                 issuer_code TEXT NOT NULL,
                 last_four TEXT NOT NULL,
@@ -813,6 +771,12 @@ public actor SQLiteEventStore {
                 created_at REAL NOT NULL
             )
             """, database: database)
+        try ensureColumn(
+            table: "cards",
+            column: "card_type_code",
+            definition: "TEXT NOT NULL DEFAULT \(sqlLiteral(cardType.code))",
+            database: database
+        )
         try execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_last_four
             ON cards(last_four)
@@ -867,34 +831,23 @@ public actor SQLiteEventStore {
             """, database: database)
         try execute("""
             INSERT OR IGNORE INTO cards (
-                id, display_name, issuer_code, last_four,
+                id, card_type_code, display_name, issuer_code, last_four,
                 performance_target_amount, created_at
             ) VALUES (
-                '\(defaultCardID.uuidString)', 'MG 더나은 체크카드', 'MG', '4775',
-                300000, 0
+                '\(defaultCardID.uuidString)', \(sqlLiteral(cardType.code)),
+                \(sqlLiteral(cardType.displayName)), \(sqlLiteral(cardType.issuerCode)), '4775',
+                \(cardType.defaultMonthlyPerformanceTargetAmount), 0
             )
             """, database: database)
-        try execute("""
-            INSERT OR IGNORE INTO card_benefits (
-                id, card_id, label, rate_basis_points, maximum_amount, sort_order
-            ) VALUES (
-                '\(coffeeBenefitID.uuidString)', '\(defaultCardID.uuidString)',
-                '커피 10% 할인', 1000, 5000, 0
+        for (sortOrder, benefit) in cardType.benefits.enumerated() {
+            try upsertCardBenefit(
+                database: database,
+                cardID: defaultCardID,
+                benefit: benefit,
+                sortOrder: sortOrder
             )
-            """, database: database)
-        let performanceExclusions = [
-            "세금 및 공과금",
-            "아파트 관리비",
-            "대학 등록금",
-            "상품권·선불카드 충전"
-        ]
-        let benefitExclusions = [
-            "무이자 할부 거래",
-            "상품권 및 기프트카드 구매",
-            "포인트·쿠폰 사용분",
-            "일부 임대매장 및 백화점 입점 매장"
-        ]
-        for (sortOrder, label) in performanceExclusions.enumerated() {
+        }
+        for (sortOrder, label) in cardType.performanceExclusions.enumerated() {
             try insertCardExclusion(
                 database: database,
                 cardID: defaultCardID,
@@ -903,7 +856,7 @@ public actor SQLiteEventStore {
                 sortOrder: sortOrder
             )
         }
-        for (sortOrder, label) in benefitExclusions.enumerated() {
+        for (sortOrder, label) in cardType.benefitExclusions.enumerated() {
             try insertCardExclusion(
                 database: database,
                 cardID: defaultCardID,
@@ -912,14 +865,6 @@ public actor SQLiteEventStore {
                 sortOrder: sortOrder
             )
         }
-        try execute("""
-            INSERT OR IGNORE INTO card_benefits (
-                id, card_id, label, rate_basis_points, maximum_amount, sort_order
-            ) VALUES (
-                '\(convenienceBenefitID.uuidString)', '\(defaultCardID.uuidString)',
-                '편의점 5% 할인', 500, 5000, 1
-            )
-            """, database: database)
         try execute("""
             INSERT OR IGNORE INTO transaction_cards (transaction_id, card_id)
             SELECT ct.id, COALESCE(
@@ -935,6 +880,10 @@ public actor SQLiteEventStore {
         try execute("""
             CREATE INDEX IF NOT EXISTS idx_transaction_cards_card_id
             ON transaction_cards(card_id)
+            """, database: database)
+        try execute("""
+            CREATE INDEX IF NOT EXISTS idx_cards_card_type_code
+            ON cards(card_type_code)
             """, database: database)
         try execute("PRAGMA optimize", database: database)
     }
@@ -978,6 +927,84 @@ public actor SQLiteEventStore {
         else {
             throw SQLiteEventStoreError.schema(String(cString: sqlite3_errmsg(database)))
         }
+    }
+
+    private static func upsertCardBenefit(
+        database: OpaquePointer,
+        cardID: UUID,
+        benefit: CardTypeBenefitDefinition,
+        sortOrder: Int
+    ) throws {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(
+            database,
+            """
+            INSERT INTO card_benefits (
+                id, card_id, label, rate_basis_points, maximum_amount, sort_order
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                card_id = excluded.card_id,
+                label = excluded.label,
+                rate_basis_points = excluded.rate_basis_points,
+                maximum_amount = excluded.maximum_amount,
+                sort_order = excluded.sort_order
+            """,
+            -1,
+            &statement,
+            nil
+        ) == SQLITE_OK, let statement else {
+            throw SQLiteEventStoreError.schema(String(cString: sqlite3_errmsg(database)))
+        }
+        defer { sqlite3_finalize(statement) }
+        let values = [benefit.id.uuidString, cardID.uuidString, benefit.label]
+        for (offset, value) in values.enumerated() {
+            let result = value.withCString {
+                sqlite3_bind_text(statement, Int32(offset + 1), $0, -1, sqliteTransient)
+            }
+            guard result == SQLITE_OK else {
+                throw SQLiteEventStoreError.schema(String(cString: sqlite3_errmsg(database)))
+            }
+        }
+        guard
+            sqlite3_bind_int64(statement, 4, sqlite3_int64(benefit.rateBasisPoints)) == SQLITE_OK,
+            sqlite3_bind_int64(statement, 5, sqlite3_int64(benefit.monthlyMaximumAmount)) == SQLITE_OK,
+            sqlite3_bind_int64(statement, 6, sqlite3_int64(sortOrder)) == SQLITE_OK,
+            sqlite3_step(statement) == SQLITE_DONE
+        else {
+            throw SQLiteEventStoreError.schema(String(cString: sqlite3_errmsg(database)))
+        }
+    }
+
+    private static func ensureColumn(
+        table: String,
+        column: String,
+        definition: String,
+        database: OpaquePointer
+    ) throws {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(
+            database,
+            "PRAGMA table_info(\(table))",
+            -1,
+            &statement,
+            nil
+        ) == SQLITE_OK, let statement else {
+            throw SQLiteEventStoreError.schema(String(cString: sqlite3_errmsg(database)))
+        }
+        defer { sqlite3_finalize(statement) }
+
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let name = sqlite3_column_text(statement, 1) else { continue }
+            if String(cString: name) == column { return }
+        }
+        try execute(
+            "ALTER TABLE \(table) ADD COLUMN \(column) \(definition)",
+            database: database
+        )
+    }
+
+    private static func sqlLiteral(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "''"))'"
     }
 
     private func beginTransaction() throws {
@@ -1081,10 +1108,13 @@ public actor SQLiteEventStore {
         var cardID = Self.defaultCardID
         if let parsedLastFour {
             let cardStatement = try prepare("""
-                SELECT id FROM cards WHERE last_four = ? LIMIT 1
+                SELECT id FROM cards
+                WHERE last_four = ? AND card_type_code = ?
+                LIMIT 1
                 """)
             defer { sqlite3_finalize(cardStatement) }
             try bindText(parsedLastFour, to: cardStatement, at: 1)
+            try bindText(cardType.code, to: cardStatement, at: 2)
             if
                 sqlite3_step(cardStatement) == SQLITE_ROW,
                 let value = columnString(cardStatement, at: 0),

@@ -16,6 +16,7 @@ public struct CardBenefit: Codable, Equatable, Sendable {
 
 public struct ManagedCard: Codable, Equatable, Sendable {
     public let id: UUID
+    public let cardTypeCode: String
     public let displayName: String
     public let issuerCode: String
     public let lastFour: String
@@ -26,6 +27,7 @@ public struct ManagedCard: Codable, Equatable, Sendable {
 
     public init(
         id: UUID,
+        cardTypeCode: String,
         displayName: String,
         issuerCode: String,
         lastFour: String,
@@ -35,6 +37,7 @@ public struct ManagedCard: Codable, Equatable, Sendable {
         benefitExclusions: [String]
     ) {
         self.id = id
+        self.cardTypeCode = cardTypeCode
         self.displayName = displayName
         self.issuerCode = issuerCode
         self.lastFour = lastFour
@@ -63,13 +66,15 @@ public struct CardResponse: Codable, Equatable, Sendable {
 
 public struct CardUpdateRequest: Codable, Equatable, Sendable {
     public let displayName: String
-    public let issuerCode: String
+    /// Accepted for wire compatibility with the issue #5 client. The server
+    /// derives issuer identity from `cardTypeCode` and does not persist this.
+    public let issuerCode: String?
     public let lastFour: String
     public let performanceTargetAmount: Int
 
     public init(
         displayName: String,
-        issuerCode: String,
+        issuerCode: String? = nil,
         lastFour: String,
         performanceTargetAmount: Int
     ) {

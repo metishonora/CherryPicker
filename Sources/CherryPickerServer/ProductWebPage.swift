@@ -278,7 +278,7 @@ enum ProductWebPage {
                 <div class="cp-heading"><h1>카드 설정</h1><p>선택한 카드의 표시 정보와 실적 목표를 관리합니다.</p></div>
                 <form id="settings-form">
                   <div class="cp-field"><label for="setting-name">카드 이름</label><input id="setting-name" required></div>
-                  <div class="cp-field"><label for="setting-issuer">카드사</label><input id="setting-issuer" required></div>
+                  <div class="cp-field"><label for="setting-issuer">카드사</label><input id="setting-issuer" readonly></div>
                   <div class="cp-field"><label for="setting-last-four">끝 네 자리</label><input id="setting-last-four" inputmode="numeric" minlength="4" maxlength="4" required></div>
                   <div class="cp-field"><label for="setting-target">월 실적 목표</label><input id="setting-target" type="number" inputmode="numeric" min="1" required></div>
                   <div class="cp-actions"><span></span><button class="cp-button cp-button-primary" type="submit">저장</button></div>
@@ -614,7 +614,7 @@ enum ProductWebPage {
               }));
               $('#settings-form').addEventListener('submit', async event => {
                 event.preventDefault();
-                const body = { displayName: $('#setting-name').value, issuerCode: $('#setting-issuer').value, lastFour: $('#setting-last-four').value, performanceTargetAmount: Number($('#setting-target').value) };
+                const body = { displayName: $('#setting-name').value, lastFour: $('#setting-last-four').value, performanceTargetAmount: Number($('#setting-target').value) };
                 const data = await api(`/api/v1/cards/${state.selectedCardId}`, { method: 'PUT', body: JSON.stringify(body) });
                 state.cards = state.cards.map(value => value.id === data.card.id ? data.card : value); await loadCards(); $('#card-selector').value = state.selectedCardId; toast('카드 설정을 저장했습니다');
               });

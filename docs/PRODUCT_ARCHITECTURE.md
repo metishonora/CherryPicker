@@ -31,11 +31,14 @@ flowchart LR
 - 사용자 수정값은 재파싱으로 덮어쓰지 않는다.
 - 기본 웹, 로그와 오류에는 원문, 이름, 잔액과 인증 identity를 노출하지 않는다.
 - 취소는 원승인과 연결하지 않는 독립 거래다.
+- 카드 종류는 안정적인 코드, 문자 식별·파싱 규칙, 기본 실적 목표와
+  혜택 정책을 함께 소유한다. 보유 카드는 카드 종류 코드를 참조하고
+  UUID, 표시 이름, 끝 네 자리와 사용자 실적 목표만 소유한다.
 
 ## 현역 코드 경계
 
 ```text
-Sources/CherryPickerCore/          파서와 순수 도메인 정책
+Sources/CherryPickerCore/          카드 종류 정의, 파서와 순수 도메인 정책
 Sources/CherryPickerServer/        HTTP 계약과 SQLite 저장
 Sources/CherryPickerLocalServer/   macOS 실행 파일과 구성
 Scripts/LocalServer/               제품 설치·제거·fixture 검증
@@ -44,6 +47,13 @@ Scripts/Issue7/                    역사적 #7 스파이크 운영 도구
 
 네이티브 iOS 앱과 SwiftData는 제품 경계가 아니다. 기존 앱 데이터의 이전도
 제품 전환의 선행 조건이 아니다.
+
+MVP 카드 종류는 코드 `mg.the-better-check`인
+`MGTheBetterCheckCardDefinition` 하나다. 서버는 이 정의를 통해 문자를
+파싱하고 혜택·제외 정책을 읽는다. SQLite의 보유 카드 행은
+`card_type_code`로 이 정의를 참조하며, 기존 DB에는 이 열을 추가하되
+사용자별 값은 보존한다. 문자 발신자 식별자는 실기기에서 확인한 뒤 같은
+정의에 추가한다.
 
 ## 구현 순서
 
