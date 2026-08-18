@@ -93,16 +93,15 @@ legend, .memo-field > span { margin-bottom: 10px; font-weight: 750; }
 .choice span { padding: 14px; display: block; border: 2px solid transparent; border-radius: 14px; background: var(--soft); text-align: center; font-weight: 700; }
 .choice input:checked + span { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 .legend-note { margin: -4px 0 12px; color: var(--muted); font-size: 13px; }
-.benefit-choice { padding: 16px; display: grid; grid-template-columns: auto minmax(0,1fr); gap: 13px; align-items: start; border: 2px solid transparent; border-radius: 17px; background: var(--soft); cursor: pointer; }
+.benefit-choice { padding: 16px; display: grid; grid-template-columns: auto minmax(0,1fr); gap: 13px; align-items: start; border-radius: 16px; background: var(--soft); cursor: pointer; }
 .benefit-choice + .benefit-choice { margin-top: 10px; }
-.benefit-choice:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
-.benefit-choice > input { width: 21px; height: 21px; margin: 2px 0 0; accent-color: var(--accent); }
-.choice-content { min-width: 0; display: grid; gap: 4px; color: var(--subtle); font-size: 13px; }
-.choice-title { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; color: var(--text); font-size: 15px; }
-.choice-title em { padding: 2px 7px; border-radius: 999px; color: var(--green); background: #eaf8f3; font-size: 11px; font-style: normal; }
-.choice-content small { color: var(--muted); }
-.choice-preview { margin-top: 7px; padding-top: 9px; border-top: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); color: var(--subtle); }
-.choice-preview strong { color: var(--text); }
+.benefit-choice > input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--accent); }
+.choice-content { min-width: 0; display: grid; }
+.choice-content > b { font-size: 15px; }
+.choice-progress { margin-top: 8px; }
+.choice-metric { display: flex; justify-content: space-between; gap: 16px; color: var(--subtle); font-size: 14px; }
+.choice-metric strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.choice-progress .progress { margin-top: 10px; }
 .memo-field { margin-top: 22px; display: grid; }
 textarea { width: 100%; padding: 13px; resize: vertical; border: 1px solid var(--line); border-radius: 14px; background: #fff; outline: none; }
 textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }

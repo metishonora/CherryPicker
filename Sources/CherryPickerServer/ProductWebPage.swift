@@ -167,7 +167,6 @@ enum ProductWebPage {
             .cp-check-row + .cp-check-row { margin-top: 10px; }
             .cp-check-row input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--cp-accent); }
             .cp-check-row label { font-weight: 650; }
-            .cp-check-row .cp-benefit-terms { grid-column: 2; }
             .cp-check-progress { grid-column: 2; margin-top: 8px; }
             .cp-switch-row { display: flex; justify-content: space-between; gap: 18px; align-items: center; padding: 18px 0; }
             .cp-switch-row input { width: 24px; height: 24px; accent-color: var(--cp-accent); }
@@ -591,11 +590,10 @@ enum ProductWebPage {
                   const row = document.createElement('div'); row.className = 'cp-check-row';
                   const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.id = `benefit-${benefit.id}`; checkbox.value = benefit.id; checkbox.checked = transaction.benefitIds.includes(benefit.id);
                   const label = document.createElement('label'); label.htmlFor = checkbox.id; label.textContent = benefit.label;
-                  const terms = document.createElement('p'); terms.className = 'cp-benefit-terms'; terms.textContent = benefitTerms(benefit, true);
                   const wrap = document.createElement('div'); wrap.className = 'cp-check-progress'; wrap.id = `benefit-progress-${benefit.id}`;
                   const metric = document.createElement('div'); metric.className = 'cp-metric-label'; const caption = document.createElement('span'); caption.textContent = '받은 혜택'; const amount = document.createElement('strong'); metric.append(caption, amount);
                   const progress = document.createElement('div'); progress.className = 'cp-progress'; progress.setAttribute('role', 'progressbar'); progress.setAttribute('aria-label', benefit.label); progress.append(document.createElement('span'));
-                  wrap.append(metric, progress); row.append(checkbox, label, terms, wrap); benefits.append(row); checkbox.addEventListener('change', updateReviewPreview);
+                  wrap.append(metric, progress); row.append(checkbox, label, wrap); benefits.append(row); checkbox.addEventListener('change', updateReviewPreview);
                 });
                 await showView('detail'); updateReviewPreview();
               }

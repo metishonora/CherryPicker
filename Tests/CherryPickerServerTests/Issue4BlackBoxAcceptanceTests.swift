@@ -582,6 +582,9 @@ final class Issue4BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
                 XCTAssertTrue(body.contains("benefit.eligibleMerchants"))
                 XCTAssertTrue(body.contains("benefit.exclusionNotes"))
                 XCTAssertTrue(body.contains("selected.performanceCalculationBasis"))
+                XCTAssertFalse(body.contains("benefitTerms(benefit, true)"))
+                XCTAssertFalse(body.contains("row.append(checkbox, label, terms, wrap)"))
+                XCTAssertTrue(body.contains("row.append(checkbox, label, wrap)"))
                 XCTAssertFalse(body.contains("originalMessage"))
             }
         }

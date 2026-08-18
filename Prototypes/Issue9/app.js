@@ -23,17 +23,10 @@ document.querySelectorAll('[data-show], [data-view]').forEach(button => {
   });
 });
 
-const transactionAmount = 12_500;
-const monthlyLimit = 6_000;
-
 document.querySelectorAll('.benefit-choice').forEach(choice => {
   const checkbox = choice.querySelector('input');
-  const preview = choice.querySelector('.choice-preview');
-  const amount = Math.trunc(transactionAmount * 0.2);
-  const base = Number(choice.dataset.base);
-  const total = Math.min(monthlyLimit, base + amount);
-  preview.innerHTML = `이번 거래 ${amount.toLocaleString('ko-KR')}원 · 월 누적 <strong>${total.toLocaleString('ko-KR')}원 / ${monthlyLimit.toLocaleString('ko-KR')}원</strong>`;
-  checkbox.addEventListener('change', () => { preview.hidden = !checkbox.checked; });
+  const progress = choice.querySelector('.choice-progress');
+  checkbox.addEventListener('change', () => { progress.hidden = !checkbox.checked; });
 });
 
 const excludeToggle = document.querySelector('#exclude-toggle');
