@@ -344,6 +344,7 @@ enum ProductWebPage {
                 return `${part('year')}-${part('month')}`;
               };
               const currentMonth = monthKeyForDate(new Date());
+              const earliestMonth = '2026-08';
               const state = { cards: [], selectedCardId: null, view: 'inbox', filter: 'all', month: currentMonth, activeTransaction: null, dashboard: null, returnView: 'inbox' };
               const card = () => state.cards.find(value => value.id === state.selectedCardId);
 
@@ -358,8 +359,15 @@ enum ProductWebPage {
                 return `${year}년 ${month}월`;
               }
 
+              function clampedMonth(value) {
+                if (value < earliestMonth) return earliestMonth;
+                if (value > currentMonth) return currentMonth;
+                return value;
+              }
+
               function syncPeriodControls() {
                 $$('[data-period-label]').forEach(value => { value.textContent = monthLabel(state.month); });
+                $$('[data-month-step="-1"]').forEach(value => { value.disabled = state.month <= earliestMonth; });
                 $$('[data-month-step="1"]').forEach(value => { value.disabled = state.month >= currentMonth; });
               }
 
@@ -613,7 +621,7 @@ enum ProductWebPage {
               });
               $$('[data-month-step]').forEach(button => button.addEventListener('click', async () => {
                 const next = shiftedMonth(state.month, Number(button.dataset.monthStep));
-                state.month = next > currentMonth ? currentMonth : next;
+                state.month = clampedMonth(next);
                 if (state.view === 'dashboard') await loadDashboard();
                 if (state.view === 'transactions') await loadTransactions();
               }));
