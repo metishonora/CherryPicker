@@ -144,7 +144,9 @@ public struct MonthlyDashboardCalculator: Sendable {
         period: DateInterval,
         targetAmount: Int,
         benefits: [DashboardBenefitDefinition],
-        transactions: [DashboardTransactionInput]
+        transactions: [DashboardTransactionInput],
+        performanceOffsetAmount: Int = 0,
+        benefitOffsetAmounts: [UUID: Int] = [:]
     ) -> MonthlyDashboardCalculation {
         var currentAmount = 0
         var excludedAmount = 0
@@ -181,21 +183,24 @@ public struct MonthlyDashboardCalculator: Sendable {
             }
         }
 
+        let adjustedCurrentAmount = currentAmount + performanceOffsetAmount
         return MonthlyDashboardCalculation(
             performance: DashboardPerformanceCalculation(
-                currentAmount: currentAmount,
-                remainingAmount: max(0, targetAmount - currentAmount),
+                currentAmount: adjustedCurrentAmount,
+                remainingAmount: max(0, targetAmount - adjustedCurrentAmount),
                 excludedAmount: excludedAmount,
                 unconfirmedAmount: unconfirmedAmount,
                 unconfirmedCount: unconfirmedCount
             ),
             benefits: benefits.map { benefit in
-                DashboardBenefitCalculation(
+                let adjustedAmount = rawBenefitAmounts[benefit.id, default: 0]
+                    + benefitOffsetAmounts[benefit.id, default: 0]
+                return DashboardBenefitCalculation(
                     id: benefit.id,
-                    calculationAmount: rawBenefitAmounts[benefit.id, default: 0],
+                    calculationAmount: adjustedAmount,
                     receivedAmount: max(
                         0,
-                        min(benefit.maximumAmount, rawBenefitAmounts[benefit.id, default: 0])
+                        min(benefit.maximumAmount, adjustedAmount)
                     )
                 )
             },

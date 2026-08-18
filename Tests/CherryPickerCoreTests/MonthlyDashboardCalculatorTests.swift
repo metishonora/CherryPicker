@@ -91,6 +91,49 @@ final class MonthlyDashboardCalculatorTests: XCTestCase {
         XCTAssertEqual(floored.benefits.first?.receivedAmount, 0)
     }
 
+    func testSignedOffsetsUseStableBenefitIDsAndClampOnlyTheDisplayedBenefit() throws {
+        let benefitIDs = [
+            UUID(uuidString: "00000000-0000-0000-0001-000000001010")!,
+            UUID(uuidString: "00000000-0000-0000-0002-000000001010")!,
+            UUID(uuidString: "00000000-0000-0000-0003-000000001010")!
+        ]
+        let benefits = benefitIDs.map {
+            DashboardBenefitDefinition(id: $0, rateBasisPoints: 2_000, maximumAmount: 6_000)
+        }
+        let unknownBenefitID = UUID(uuidString: "00000000-0000-0000-9999-000000001010")!
+        let month = try DashboardMonth(identifier: "2026-08")
+
+        let result = calculator.calculate(
+            period: try month.interval,
+            targetAmount: 300_000,
+            benefits: benefits,
+            transactions: [
+                transaction(
+                    amount: 300_000,
+                    performance: .included,
+                    benefitIDs: Set(benefitIDs)
+                )
+            ],
+            performanceOffsetAmount: -20_000,
+            benefitOffsetAmounts: [
+                benefitIDs[0]: -57_000,
+                benefitIDs[1]: 5_000,
+                benefitIDs[2]: -65_000,
+                unknownBenefitID: 999_999
+            ]
+        )
+
+        XCTAssertEqual(result.performance.currentAmount, 280_000)
+        XCTAssertEqual(result.performance.remainingAmount, 20_000)
+        XCTAssertEqual(result.benefits[0].calculationAmount, 3_000)
+        XCTAssertEqual(result.benefits[0].receivedAmount, 3_000)
+        XCTAssertEqual(result.benefits[1].calculationAmount, 65_000)
+        XCTAssertEqual(result.benefits[1].receivedAmount, 6_000)
+        XCTAssertEqual(result.benefits[2].calculationAmount, -5_000)
+        XCTAssertEqual(result.benefits[2].receivedAmount, 0)
+        XCTAssertEqual(result.benefits.map(\.id), benefitIDs)
+    }
+
     private func transaction(
         occurredAt: String = "2026-08-15T12:00:00+09:00",
         amount: Int,

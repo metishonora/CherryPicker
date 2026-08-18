@@ -200,6 +200,25 @@ enum ProductWebPage {
               border-radius: 12px; background: var(--cp-soft); font-size: 16px;
             }
             .cp-field textarea { min-height: 100px; resize: vertical; }
+            .cp-field input:focus-visible, .cp-button:focus-visible, .cp-card-select:focus-visible {
+              outline: 3px solid color-mix(in srgb, var(--cp-accent) 34%, transparent); outline-offset: 2px;
+            }
+            .cp-field input[aria-invalid="true"] { border-color: var(--cp-danger); }
+            .cp-field-help, .cp-field-error { margin: 0; font-size: 13px; }
+            .cp-field-help { color: var(--cp-muted); }
+            .cp-field-error { color: var(--cp-danger); }
+            .cp-settings-section { margin-top: 34px; padding-top: 28px; border-top: 1px solid var(--cp-line); }
+            .cp-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+            .cp-section-heading h2 { margin: 0; font-size: 20px; }
+            .cp-section-heading p { margin: 7px 0 0; color: var(--cp-subtle); }
+            .cp-period-badge {
+              flex: 0 0 auto; padding: 7px 10px; border-radius: 999px; color: var(--cp-accent);
+              background: var(--cp-accent-soft); font-size: 13px; font-weight: 700; white-space: nowrap;
+            }
+            .cp-benefit-offsets { margin-top: 30px; }
+            .cp-subheading h3 { margin: 0; font-size: 18px; }
+            .cp-subheading p { margin: 5px 0 0; color: var(--cp-muted); font-size: 14px; }
+            .cp-benefit-field + .cp-benefit-field { margin-top: 22px; padding-top: 4px; }
             .cp-actions { display: grid; grid-template-columns: 1fr 1.35fr; gap: 10px; margin-top: 28px; }
             .cp-button { min-height: 52px; padding: 13px 18px; border: 0; border-radius: 15px; background: var(--cp-soft); font-weight: 700; }
             .cp-button-primary { color: #17191d; background: var(--cp-accent); }
@@ -219,6 +238,8 @@ enum ProductWebPage {
               #view-dashboard .cp-metric-label { display: grid; gap: 3px; }
               #view-dashboard .cp-metric-label strong { justify-self: start; }
               .cp-month-picker { padding: 16px; }
+              .cp-section-heading { display: grid; gap: 12px; }
+              .cp-period-badge { justify-self: start; }
               .cp-actions { grid-template-columns: 1fr 1.25fr; }
             }
             @media (prefers-reduced-motion: reduce) { .cp-progress span { transition: none; } }
@@ -330,6 +351,22 @@ enum ProductWebPage {
                   <div class="cp-field"><label for="setting-issuer">카드사</label><input id="setting-issuer" readonly></div>
                   <div class="cp-field"><label for="setting-last-four">끝 네 자리</label><input id="setting-last-four" inputmode="numeric" minlength="4" maxlength="4" required></div>
                   <div class="cp-field"><label for="setting-target">월 실적 목표</label><input id="setting-target" type="number" inputmode="numeric" min="1" required></div>
+                  <section class="cp-settings-section" aria-labelledby="settings-offset-title">
+                    <div class="cp-section-heading">
+                      <div><h2 id="settings-offset-title">이번 달 수동 조정</h2><p>CherryPicker에서 확인할 수 없는 금액만 더하거나 빼세요.</p></div>
+                      <span class="cp-period-badge" id="settings-current-period"></span>
+                    </div>
+                    <div class="cp-field">
+                      <label for="setting-performance-offset">실적 오프셋</label>
+                      <input id="setting-performance-offset" data-offset-input type="text" inputmode="text" autocomplete="off" aria-describedby="setting-performance-offset-help setting-performance-offset-error">
+                      <p class="cp-field-help" id="setting-performance-offset-help">거래로 계산한 이번 달 실적에 더해집니다. 차감하려면 음수로 입력하세요.</p>
+                      <p class="cp-field-error" id="setting-performance-offset-error" hidden>원 단위 정수로 입력해주세요.</p>
+                    </div>
+                    <div class="cp-benefit-offsets" aria-labelledby="settings-benefit-offset-title">
+                      <div class="cp-subheading"><h3 id="settings-benefit-offset-title">혜택별 오프셋</h3><p>각 혜택에만 따로 반영됩니다.</p></div>
+                      <div id="settings-benefit-offsets"></div>
+                    </div>
+                  </section>
                   <div class="cp-actions"><span></span><button class="cp-button cp-button-primary" type="submit">저장</button></div>
                 </form>
               </section>
@@ -528,7 +565,7 @@ enum ProductWebPage {
                 if (view === 'inbox') await loadInbox();
                 if (view === 'dashboard') await loadDashboard();
                 if (view === 'transactions') await loadTransactions();
-                if (view === 'settings') renderSettings();
+                if (view === 'settings') await loadSettings();
               }
 
               function transactionRow(transaction, includeCard) {
@@ -628,10 +665,54 @@ enum ProductWebPage {
                 $('#transaction-empty').hidden = data.transactions.length !== 0;
               }
 
-              function renderSettings() {
+              function parseOffsetAmount(value) {
+                const compact = value.replaceAll(',', '').trim();
+                if (!/^-?\d+$/.test(compact)) return null;
+                const amount = Number(compact);
+                return Number.isSafeInteger(amount) ? amount : null;
+              }
+
+              function setOffsetInputError(input, hasError) {
+                input.setAttribute('aria-invalid', String(hasError));
+                $(`#${input.id}-error`).hidden = !hasError;
+              }
+
+              function validateOffsetInput(input) {
+                const amount = parseOffsetAmount(input.value);
+                setOffsetInputError(input, amount === null);
+                return amount;
+              }
+
+              function prepareOffsetInput(input) {
+                input.addEventListener('input', () => {
+                  if (input.getAttribute('aria-invalid') === 'true') validateOffsetInput(input);
+                });
+                input.addEventListener('blur', () => validateOffsetInput(input));
+              }
+
+              async function loadSettings() {
                 const selected = card(); if (!selected) return;
                 $('#setting-name').value = selected.displayName; $('#setting-issuer').value = selected.issuerCode;
                 $('#setting-last-four').value = selected.lastFour; $('#setting-target').value = selected.performanceTargetAmount;
+                $('#settings-current-period').textContent = monthLabel(currentMonth);
+                const data = await api(`/api/v1/cards/${state.selectedCardId}/monthly-offsets?month=${currentMonth}`);
+                const offsets = data.monthlyOffsets;
+                const performanceInput = $('#setting-performance-offset');
+                performanceInput.value = String(offsets.performanceOffsetAmount);
+                setOffsetInputError(performanceInput, false);
+
+                const values = new Map(offsets.benefitOffsets.map(value => [value.benefitId, value.offsetAmount]));
+                const container = $('#settings-benefit-offsets');
+                container.replaceChildren(...selected.benefits.map(benefit => {
+                  const wrap = document.createElement('div'); wrap.className = 'cp-benefit-field';
+                  const field = document.createElement('div'); field.className = 'cp-field';
+                  const inputID = `setting-benefit-offset-${benefit.id}`;
+                  const label = document.createElement('label'); label.htmlFor = inputID; label.textContent = benefit.label;
+                  const input = document.createElement('input'); input.id = inputID; input.type = 'text'; input.inputMode = 'text'; input.autocomplete = 'off'; input.dataset.offsetInput = ''; input.dataset.benefitId = benefit.id; input.value = String(values.get(benefit.id) || 0); input.setAttribute('aria-describedby', `${inputID}-help ${inputID}-error`);
+                  const help = document.createElement('p'); help.className = 'cp-field-help'; help.id = `${inputID}-help`; help.textContent = `적용 결과는 0원에서 월 최대 ${won(benefit.maximumAmount)} 사이로 제한됩니다.`;
+                  const error = document.createElement('p'); error.className = 'cp-field-error'; error.id = `${inputID}-error`; error.textContent = '원 단위 정수로 입력해주세요.'; error.hidden = true;
+                  field.append(label, input, help, error); wrap.append(field); prepareOffsetInput(input); return wrap;
+                }));
               }
 
               function benefitContribution(transaction, benefit) {
@@ -713,9 +794,9 @@ enum ProductWebPage {
                 toast('저장했습니다'); await showView(state.returnView);
               }
 
-              $$('.cp-nav button').forEach(button => button.addEventListener('click', async () => {
+              $$('.cp-nav button').forEach(button => button.addEventListener('click', () => {
                 if (button.dataset.view === 'inbox') { state.selectedCardId = null; $('#card-selector').value = ''; setCardNavigationVisible(false); }
-                await showView(button.dataset.view);
+                showView(button.dataset.view).catch(showError);
               }));
               $('#card-selector').addEventListener('change', async event => {
                 state.selectedCardId = event.target.value || null; state.month = currentMonth; setCardNavigationVisible(Boolean(state.selectedCardId));
@@ -746,11 +827,30 @@ enum ProductWebPage {
               $$('.cp-filter button').forEach(button => button.addEventListener('click', async () => {
                 state.filter = button.dataset.filter; $$('.cp-filter button').forEach(value => value.setAttribute('aria-pressed', String(value === button))); await loadTransactions();
               }));
+              prepareOffsetInput($('#setting-performance-offset'));
               $('#settings-form').addEventListener('submit', async event => {
                 event.preventDefault();
-                const body = { displayName: $('#setting-name').value, lastFour: $('#setting-last-four').value, performanceTargetAmount: Number($('#setting-target').value) };
-                const data = await api(`/api/v1/cards/${state.selectedCardId}`, { method: 'PUT', body: JSON.stringify(body) });
-                state.cards = state.cards.map(value => value.id === data.card.id ? data.card : value); await loadCards(); $('#card-selector').value = state.selectedCardId; toast('카드 설정을 저장했습니다');
+                const offsetInputs = $$('[data-offset-input]');
+                const offsetValues = new Map();
+                let firstInvalidInput = null;
+                offsetInputs.forEach(input => {
+                  const value = validateOffsetInput(input);
+                  if (value === null) firstInvalidInput ||= input;
+                  else offsetValues.set(input, value);
+                });
+                if (firstInvalidInput) {
+                  firstInvalidInput.focus();
+                  return showError(new Error('오프셋은 원 단위 정수로 입력해 주세요.'));
+                }
+                try {
+                  const body = { displayName: $('#setting-name').value, lastFour: $('#setting-last-four').value, performanceTargetAmount: Number($('#setting-target').value) };
+                  const data = await api(`/api/v1/cards/${state.selectedCardId}`, { method: 'PUT', body: JSON.stringify(body) });
+                  const benefitOffsets = offsetInputs.filter(input => input.dataset.benefitId).map(input => ({ benefitId: input.dataset.benefitId, offsetAmount: offsetValues.get(input) }));
+                  await api(`/api/v1/cards/${state.selectedCardId}/monthly-offsets?month=${currentMonth}`, { method: 'PUT', body: JSON.stringify({ performanceOffsetAmount: offsetValues.get($('#setting-performance-offset')), benefitOffsets }) });
+                  state.cards = state.cards.map(value => value.id === data.card.id ? data.card : value); await loadCards(); $('#card-selector').value = state.selectedCardId; clearError(); toast('카드 설정을 저장했습니다');
+                } catch (error) {
+                  showError(error);
+                }
               });
               $('#aggregation-excluded').addEventListener('change', updateReviewPreview);
               $$('input[name="performance"]').forEach(input => input.addEventListener('change', updateReviewPreview));

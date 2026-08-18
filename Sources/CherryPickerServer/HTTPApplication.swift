@@ -104,6 +104,71 @@ public struct CherryPickerHTTPApplication {
             }
         }
 
+        router.get("/api/v1/cards/:id/monthly-offsets") {
+            request, context async -> EditedResponse<String> in
+            guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
+                return Self.unauthorizedResponse()
+            }
+            guard let id = context.parameters.get("id", as: UUID.self) else {
+                return Self.badRequestResponse()
+            }
+            do {
+                let month = try Self.dashboardMonth(from: request)
+                guard let offsets = try await store.monthlyOffsets(cardID: id, month: month) else {
+                    return Self.notFoundResponse()
+                }
+                return Self.jsonResponse(
+                    status: .ok,
+                    data: try codec.encode(MonthlyOffsetsResponse(monthlyOffsets: offsets))
+                )
+            } catch DashboardMonthError.invalidIdentifier,
+                    DashboardMonthError.unresolvedInterval {
+                return Self.badRequestResponse()
+            } catch {
+                return Self.internalErrorResponse()
+            }
+        }
+
+        router.put("/api/v1/cards/:id/monthly-offsets") {
+            request, context async -> EditedResponse<String> in
+            guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
+                return Self.unauthorizedResponse()
+            }
+            guard Self.hasValidCSRFHeader(request) else {
+                return Self.forbiddenResponse()
+            }
+            guard let id = context.parameters.get("id", as: UUID.self) else {
+                return Self.badRequestResponse()
+            }
+            do {
+                let month = try Self.dashboardMonth(from: request)
+                let body = try await request.body.collect(upTo: Self.maxBatchBodyBytes)
+                let update = try codec.decode(
+                    MonthlyOffsetsUpdateRequest.self,
+                    from: Data(body.readableBytesView)
+                )
+                guard let offsets = try await store.updateMonthlyOffsets(
+                    cardID: id,
+                    month: month,
+                    request: update
+                ) else {
+                    return Self.notFoundResponse()
+                }
+                return Self.jsonResponse(
+                    status: .ok,
+                    data: try codec.encode(MonthlyOffsetsResponse(monthlyOffsets: offsets))
+                )
+            } catch ManagementStoreError.invalidInput,
+                    DashboardMonthError.invalidIdentifier,
+                    DashboardMonthError.unresolvedInterval {
+                return Self.badRequestResponse()
+            } catch is DecodingError {
+                return Self.badRequestResponse()
+            } catch {
+                return Self.internalErrorResponse()
+            }
+        }
+
         router.get("/api/v1/cards/:id/transactions") { request, context async -> EditedResponse<String> in
             guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
                 return Self.unauthorizedResponse()

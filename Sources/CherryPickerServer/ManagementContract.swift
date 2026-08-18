@@ -105,6 +105,53 @@ public struct CardUpdateRequest: Codable, Equatable, Sendable {
     }
 }
 
+public struct BenefitOffset: Codable, Equatable, Sendable {
+    public let benefitId: UUID
+    public let offsetAmount: Int
+
+    public init(benefitId: UUID, offsetAmount: Int) {
+        self.benefitId = benefitId
+        self.offsetAmount = offsetAmount
+    }
+}
+
+public struct MonthlyOffsets: Codable, Equatable, Sendable {
+    public let cardId: UUID
+    public let period: String
+    public let performanceOffsetAmount: Int
+    public let benefitOffsets: [BenefitOffset]
+
+    public init(
+        cardId: UUID,
+        period: String,
+        performanceOffsetAmount: Int,
+        benefitOffsets: [BenefitOffset]
+    ) {
+        self.cardId = cardId
+        self.period = period
+        self.performanceOffsetAmount = performanceOffsetAmount
+        self.benefitOffsets = benefitOffsets
+    }
+}
+
+public struct MonthlyOffsetsUpdateRequest: Codable, Equatable, Sendable {
+    public let performanceOffsetAmount: Int
+    public let benefitOffsets: [BenefitOffset]
+
+    public init(performanceOffsetAmount: Int, benefitOffsets: [BenefitOffset]) {
+        self.performanceOffsetAmount = performanceOffsetAmount
+        self.benefitOffsets = benefitOffsets
+    }
+}
+
+public struct MonthlyOffsetsResponse: Codable, Equatable, Sendable {
+    public let monthlyOffsets: MonthlyOffsets
+
+    public init(monthlyOffsets: MonthlyOffsets) {
+        self.monthlyOffsets = monthlyOffsets
+    }
+}
+
 public enum TransactionReviewStatus: String, Codable, Equatable, Sendable {
     case unreviewed
     case reviewed

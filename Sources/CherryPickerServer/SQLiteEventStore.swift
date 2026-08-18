@@ -338,6 +338,128 @@ public actor SQLiteEventStore {
         return try managedCard(id: id)
     }
 
+    public func monthlyOffsets(cardID: UUID, month: DashboardMonth) throws -> MonthlyOffsets? {
+        guard let card = try managedCard(id: cardID) else { return nil }
+
+        let performanceStatement = try prepare("""
+            SELECT performance_offset_amount
+            FROM card_month_offsets
+            WHERE card_id = ? AND month = ?
+            LIMIT 1
+            """)
+        defer { sqlite3_finalize(performanceStatement) }
+        try bindText(cardID.uuidString, to: performanceStatement, at: 1)
+        try bindText(month.identifier, to: performanceStatement, at: 2)
+        let performanceResult = sqlite3_step(performanceStatement)
+        let performanceOffsetAmount: Int
+        if performanceResult == SQLITE_ROW {
+            performanceOffsetAmount = Int(sqlite3_column_int64(performanceStatement, 0))
+        } else if performanceResult == SQLITE_DONE {
+            performanceOffsetAmount = 0
+        } else {
+            throw SQLiteEventStoreError.statement(lastSQLiteMessage())
+        }
+
+        let benefitStatement = try prepare("""
+            SELECT benefit_id, offset_amount
+            FROM card_benefit_offsets
+            WHERE card_id = ? AND month = ?
+            """)
+        defer { sqlite3_finalize(benefitStatement) }
+        try bindText(cardID.uuidString, to: benefitStatement, at: 1)
+        try bindText(month.identifier, to: benefitStatement, at: 2)
+        var storedBenefitOffsets: [UUID: Int] = [:]
+        while true {
+            let result = sqlite3_step(benefitStatement)
+            if result == SQLITE_DONE { break }
+            guard
+                result == SQLITE_ROW,
+                let benefitIDText = columnString(benefitStatement, at: 0),
+                let benefitID = UUID(uuidString: benefitIDText)
+            else {
+                throw SQLiteEventStoreError.invalidStoredValue("monthly benefit offset")
+            }
+            storedBenefitOffsets[benefitID] = Int(sqlite3_column_int64(benefitStatement, 1))
+        }
+
+        return MonthlyOffsets(
+            cardId: cardID,
+            period: month.identifier,
+            performanceOffsetAmount: performanceOffsetAmount,
+            benefitOffsets: card.benefits.map {
+                BenefitOffset(
+                    benefitId: $0.id,
+                    offsetAmount: storedBenefitOffsets[$0.id, default: 0]
+                )
+            }
+        )
+    }
+
+    public func updateMonthlyOffsets(
+        cardID: UUID,
+        month: DashboardMonth,
+        request: MonthlyOffsetsUpdateRequest
+    ) throws -> MonthlyOffsets? {
+        guard let card = try managedCard(id: cardID) else { return nil }
+        let requestedBenefitIDs = request.benefitOffsets.map(\.benefitId)
+        let allowedBenefitIDs = Set(card.benefits.map(\.id))
+        guard
+            Set(requestedBenefitIDs).count == requestedBenefitIDs.count,
+            requestedBenefitIDs.allSatisfy(allowedBenefitIDs.contains)
+        else {
+            throw ManagementStoreError.invalidInput
+        }
+
+        try beginTransaction()
+        do {
+            let performanceStatement = try prepare("""
+                INSERT INTO card_month_offsets (card_id, month, performance_offset_amount)
+                VALUES (?, ?, ?)
+                ON CONFLICT(card_id, month) DO UPDATE SET
+                    performance_offset_amount = excluded.performance_offset_amount
+                """)
+            defer { sqlite3_finalize(performanceStatement) }
+            try bindText(cardID.uuidString, to: performanceStatement, at: 1)
+            try bindText(month.identifier, to: performanceStatement, at: 2)
+            try bindInt(request.performanceOffsetAmount, to: performanceStatement, at: 3)
+            guard sqlite3_step(performanceStatement) == SQLITE_DONE else {
+                throw SQLiteEventStoreError.statement(lastSQLiteMessage())
+            }
+
+            let deleteStatement = try prepare("""
+                DELETE FROM card_benefit_offsets
+                WHERE card_id = ? AND month = ?
+                """)
+            defer { sqlite3_finalize(deleteStatement) }
+            try bindText(cardID.uuidString, to: deleteStatement, at: 1)
+            try bindText(month.identifier, to: deleteStatement, at: 2)
+            guard sqlite3_step(deleteStatement) == SQLITE_DONE else {
+                throw SQLiteEventStoreError.statement(lastSQLiteMessage())
+            }
+
+            for benefitOffset in request.benefitOffsets where benefitOffset.offsetAmount != 0 {
+                let insertStatement = try prepare("""
+                    INSERT INTO card_benefit_offsets (
+                        card_id, month, benefit_id, offset_amount
+                    ) VALUES (?, ?, ?, ?)
+                    """)
+                defer { sqlite3_finalize(insertStatement) }
+                try bindText(cardID.uuidString, to: insertStatement, at: 1)
+                try bindText(month.identifier, to: insertStatement, at: 2)
+                try bindText(benefitOffset.benefitId.uuidString, to: insertStatement, at: 3)
+                try bindInt(benefitOffset.offsetAmount, to: insertStatement, at: 4)
+                guard sqlite3_step(insertStatement) == SQLITE_DONE else {
+                    throw SQLiteEventStoreError.statement(lastSQLiteMessage())
+                }
+            }
+            try commitTransaction()
+        } catch {
+            rollbackTransaction()
+            throw error
+        }
+        return try monthlyOffsets(cardID: cardID, month: month)
+    }
+
     public func managedTransactions(
         scope: String? = nil,
         cardID: UUID? = nil,
@@ -498,6 +620,7 @@ public actor SQLiteEventStore {
         guard let card = try managedCard(id: cardID) else { return nil }
         let period = try month.interval
         let transactions = try managedTransactions(cardID: cardID, period: period)
+        let offsets = try monthlyOffsets(cardID: cardID, month: month)
         let calculation = MonthlyDashboardCalculator().calculate(
             period: period,
             targetAmount: card.performanceTargetAmount,
@@ -520,7 +643,13 @@ public actor SQLiteEventStore {
                         $0.performance == .excluded ? .excluded : nil,
                     benefitIDs: Set($0.benefitIds)
                 )
-            }
+            },
+            performanceOffsetAmount: offsets?.performanceOffsetAmount ?? 0,
+            benefitOffsetAmounts: Dictionary(
+                uniqueKeysWithValues: offsets?.benefitOffsets.map {
+                    ($0.benefitId, $0.offsetAmount)
+                } ?? []
+            )
         )
 
         let progress = card.benefits.map { benefit in
@@ -805,6 +934,27 @@ public actor SQLiteEventStore {
                 sort_order INTEGER NOT NULL,
                 PRIMARY KEY(card_id, kind, sort_order),
                 FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE
+            )
+            """, database: database)
+        try execute("""
+            CREATE TABLE IF NOT EXISTS card_month_offsets (
+                card_id TEXT NOT NULL,
+                month TEXT NOT NULL,
+                performance_offset_amount INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY(card_id, month),
+                FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE
+            )
+            """, database: database)
+        try execute("""
+            CREATE TABLE IF NOT EXISTS card_benefit_offsets (
+                card_id TEXT NOT NULL,
+                month TEXT NOT NULL,
+                benefit_id TEXT NOT NULL,
+                offset_amount INTEGER NOT NULL,
+                PRIMARY KEY(card_id, month, benefit_id),
+                FOREIGN KEY(card_id, month)
+                    REFERENCES card_month_offsets(card_id, month) ON DELETE CASCADE,
+                FOREIGN KEY(benefit_id) REFERENCES card_benefits(id)
             )
             """, database: database)
         try execute("""
