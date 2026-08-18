@@ -36,6 +36,35 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
                 XCTAssertNotNil(card["issuerCode"] as? String)
                 XCTAssertNotNil(card["lastFour"] as? String)
                 XCTAssertNotNil(card["performanceTargetAmount"] as? Int)
+                XCTAssertEqual(card["cardTypeCode"] as? String, "mg.the-better-check")
+                XCTAssertEqual(
+                    card["performanceCalculationBasis"] as? String,
+                    "‘더나은’ 정상 이용금액"
+                )
+                let benefits = try XCTUnwrap(card["benefits"] as? [[String: Any]])
+                XCTAssertEqual(benefits.compactMap { $0["label"] as? String }, [
+                    "간편결제 20% 할인캐시백",
+                    "온라인 쇼핑 20% 할인캐시백",
+                    "커피 20% 할인캐시백"
+                ])
+                XCTAssertEqual(
+                    benefits.compactMap { $0["rateBasisPoints"] as? Int },
+                    [2_000, 2_000, 2_000]
+                )
+                XCTAssertEqual(
+                    benefits.compactMap { $0["maximumAmount"] as? Int },
+                    [6_000, 6_000, 6_000]
+                )
+                XCTAssertEqual(
+                    benefits.compactMap { $0["minimumTransactionAmount"] as? Int },
+                    [10_000, 10_000, 5_000]
+                )
+                XCTAssertTrue((card["performanceExclusions"] as? [String])?.contains(
+                    "해외가맹점 이용금액(CD·ATM 인출 포함)"
+                ) == true)
+                XCTAssertTrue((card["benefitExclusions"] as? [String])?.contains(
+                    "자동차 판매 업종(국산차·수입차·위탁판매·중고차·이륜차 포함)"
+                ) == true)
 
                 let update: [String: Any] = [
                     "displayName": "생활비 카드",
@@ -202,9 +231,9 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
             let benefitIDs = Array(
                 (card["benefits"] as? [[String: Any]] ?? [])
                     .compactMap { $0["id"] as? String }
-                    .prefix(2)
+                    .prefix(3)
             )
-            XCTAssertGreaterThanOrEqual(benefitIDs.count, 2)
+            XCTAssertEqual(benefitIDs.count, 3)
 
             let noBenefitID = try await ingest(
                 makeApprovalEvent(

@@ -568,6 +568,7 @@ public actor SQLiteEventStore {
             issuerCode: cardType.issuerCode,
             lastFour: lastFour,
             performanceTargetAmount: Int(sqlite3_column_int64(statement, 4)),
+            performanceCalculationBasis: cardType.performanceCalculationBasis,
             benefits: benefits(cardTypeCode: cardTypeCode),
             performanceExclusions: cardType.performanceExclusions,
             benefitExclusions: cardType.benefitExclusions
@@ -580,8 +581,12 @@ public actor SQLiteEventStore {
             CardBenefit(
                 id: $0.id,
                 label: $0.label,
+                eligibleMerchants: $0.eligibleMerchants,
+                minimumTransactionAmount: $0.minimumTransactionAmount,
+                requiredPreviousMonthPerformanceAmount: $0.requiredPreviousMonthPerformanceAmount,
                 rateBasisPoints: $0.rateBasisPoints,
-                maximumAmount: $0.monthlyMaximumAmount
+                maximumAmount: $0.monthlyMaximumAmount,
+                exclusionNotes: $0.exclusionNotes
             )
         }
     }

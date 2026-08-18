@@ -577,6 +577,11 @@ final class Issue4BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
                 XCTAssertTrue(body.contains("실적 제외 항목"))
                 XCTAssertTrue(body.contains("혜택 제외 항목"))
                 XCTAssertTrue(body.contains("월 실적 진행도"))
+                XCTAssertTrue(body.contains("benefit.minimumTransactionAmount"))
+                XCTAssertTrue(body.contains("benefit.requiredPreviousMonthPerformanceAmount"))
+                XCTAssertTrue(body.contains("benefit.eligibleMerchants"))
+                XCTAssertTrue(body.contains("benefit.exclusionNotes"))
+                XCTAssertTrue(body.contains("selected.performanceCalculationBasis"))
                 XCTAssertFalse(body.contains("originalMessage"))
             }
         }

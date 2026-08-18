@@ -9,8 +9,62 @@ final class MGTheBetterCheckCardDefinitionTests: XCTestCase {
         XCTAssertEqual(definition.displayName, "MG 더나은 체크카드")
         XCTAssertEqual(definition.issuerCode, "MG")
         XCTAssertEqual(definition.defaultMonthlyPerformanceTargetAmount, 300_000)
-        XCTAssertFalse(definition.benefits.isEmpty)
+        XCTAssertEqual(definition.benefits.count, 3)
         XCTAssertEqual(Set(definition.benefits.map(\.code)).count, definition.benefits.count)
+    }
+
+    func testDefinitionOwnsVerifiedCashbackTerms() throws {
+        let simplePay = try benefit(code: "simple-pay-cashback")
+        XCTAssertEqual(simplePay.label, "간편결제 20% 할인캐시백")
+        XCTAssertEqual(simplePay.eligibleMerchants, ["네이버페이", "카카오페이", "페이코"])
+        XCTAssertEqual(simplePay.minimumTransactionAmount, 10_000)
+
+        let onlineShopping = try benefit(code: "online-shopping-cashback")
+        XCTAssertEqual(onlineShopping.label, "온라인 쇼핑 20% 할인캐시백")
+        XCTAssertEqual(
+            onlineShopping.eligibleMerchants,
+            ["쿠팡", "무신사", "지그재그", "W컨셉", "에이블리"]
+        )
+        XCTAssertEqual(onlineShopping.minimumTransactionAmount, 10_000)
+
+        let coffee = try benefit(code: "coffee-cashback")
+        XCTAssertEqual(coffee.label, "커피 20% 할인캐시백")
+        XCTAssertEqual(
+            coffee.eligibleMerchants,
+            ["스타벅스", "투썸플레이스", "커피빈", "메가커피", "빽다방", "컴포즈커피"]
+        )
+        XCTAssertEqual(coffee.minimumTransactionAmount, 5_000)
+        XCTAssertEqual(
+            coffee.exclusionNotes,
+            ["백화점·할인점·아울렛·쇼핑몰·공항·호텔 등 입점매장 제외"]
+        )
+
+        for benefit in definition.benefits {
+            XCTAssertEqual(benefit.rateBasisPoints, 2_000)
+            XCTAssertEqual(benefit.requiredPreviousMonthPerformanceAmount, 300_000)
+            XCTAssertEqual(benefit.monthlyMaximumAmount, 6_000)
+        }
+    }
+
+    func testDefinitionOwnsVerifiedPerformanceAndCashbackExclusions() {
+        XCTAssertEqual(definition.performanceCalculationBasis, "‘더나은’ 정상 이용금액")
+        XCTAssertEqual(definition.performanceExclusions, [
+            "해외가맹점 이용금액(CD·ATM 인출 포함)",
+            "소액신용결제 및 후불교통 이용금액"
+        ])
+        XCTAssertEqual(definition.benefitExclusions, [
+            "해외가맹점 이용금액(CD·ATM 인출 포함)",
+            "소액신용결제 및 후불교통 이용금액",
+            "국세·지방세·관세·공공요금",
+            "공공기관 운영시설",
+            "상품권",
+            "포인트 및 적립금 충전",
+            "선불카드 구매·충전·이용(선불교통카드 포함)",
+            "MD상품 구입",
+            "대학·대학원 등록금",
+            "택시·대중교통 이용금액(버스·철도 포함)",
+            "자동차 판매 업종(국산차·수입차·위탁판매·중고차·이륜차 포함)"
+        ])
     }
 
     func testDefinitionIdentifiesAndParsesKnownApprovalAndCancellationBodies() throws {
@@ -55,5 +109,9 @@ final class MGTheBetterCheckCardDefinitionTests: XCTestCase {
             try XCTUnwrap(definition.parse(message).transaction).parserVersion,
             "definition-owned-parser"
         )
+    }
+
+    private func benefit(code: String) throws -> CardTypeBenefitDefinition {
+        try XCTUnwrap(definition.benefits.first { $0.code == code })
     }
 }

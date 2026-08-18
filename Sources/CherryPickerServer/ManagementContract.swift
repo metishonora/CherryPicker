@@ -3,14 +3,31 @@ import Foundation
 public struct CardBenefit: Codable, Equatable, Sendable {
     public let id: UUID
     public let label: String
+    public let eligibleMerchants: [String]
+    public let minimumTransactionAmount: Int
+    public let requiredPreviousMonthPerformanceAmount: Int
     public let rateBasisPoints: Int
     public let maximumAmount: Int
+    public let exclusionNotes: [String]
 
-    public init(id: UUID, label: String, rateBasisPoints: Int, maximumAmount: Int) {
+    public init(
+        id: UUID,
+        label: String,
+        eligibleMerchants: [String],
+        minimumTransactionAmount: Int,
+        requiredPreviousMonthPerformanceAmount: Int,
+        rateBasisPoints: Int,
+        maximumAmount: Int,
+        exclusionNotes: [String]
+    ) {
         self.id = id
         self.label = label
+        self.eligibleMerchants = eligibleMerchants
+        self.minimumTransactionAmount = minimumTransactionAmount
+        self.requiredPreviousMonthPerformanceAmount = requiredPreviousMonthPerformanceAmount
         self.rateBasisPoints = rateBasisPoints
         self.maximumAmount = maximumAmount
+        self.exclusionNotes = exclusionNotes
     }
 }
 
@@ -21,6 +38,7 @@ public struct ManagedCard: Codable, Equatable, Sendable {
     public let issuerCode: String
     public let lastFour: String
     public let performanceTargetAmount: Int
+    public let performanceCalculationBasis: String
     public let benefits: [CardBenefit]
     public let performanceExclusions: [String]
     public let benefitExclusions: [String]
@@ -32,6 +50,7 @@ public struct ManagedCard: Codable, Equatable, Sendable {
         issuerCode: String,
         lastFour: String,
         performanceTargetAmount: Int,
+        performanceCalculationBasis: String,
         benefits: [CardBenefit],
         performanceExclusions: [String],
         benefitExclusions: [String]
@@ -42,6 +61,7 @@ public struct ManagedCard: Codable, Equatable, Sendable {
         self.issuerCode = issuerCode
         self.lastFour = lastFour
         self.performanceTargetAmount = performanceTargetAmount
+        self.performanceCalculationBasis = performanceCalculationBasis
         self.benefits = benefits
         self.performanceExclusions = performanceExclusions
         self.benefitExclusions = benefitExclusions

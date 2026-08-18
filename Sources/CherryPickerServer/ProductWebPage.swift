@@ -137,6 +137,7 @@ enum ProductWebPage {
             .cp-progress span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--cp-accent); transition: width .18s ease; }
             .cp-benefit-progress + .cp-benefit-progress { margin-top: 20px; }
             .cp-benefit + .cp-benefit { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--cp-line); }
+            .cp-benefit-terms { margin: 7px 0 0; color: var(--cp-subtle); font-size: 14px; white-space: pre-line; }
             .cp-filter { display: flex; gap: 8px; margin: 0 0 20px; overflow-x: auto; }
             .cp-filter button {
               flex: 0 0 auto; padding: 9px 14px; border: 0; border-radius: 999px;
@@ -166,6 +167,7 @@ enum ProductWebPage {
             .cp-check-row + .cp-check-row { margin-top: 10px; }
             .cp-check-row input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--cp-accent); }
             .cp-check-row label { font-weight: 650; }
+            .cp-check-row .cp-benefit-terms { grid-column: 2; }
             .cp-check-progress { grid-column: 2; margin-top: 8px; }
             .cp-switch-row { display: flex; justify-content: space-between; gap: 18px; align-items: center; padding: 18px 0; }
             .cp-switch-row input { width: 24px; height: 24px; accent-color: var(--cp-accent); }
@@ -229,6 +231,7 @@ enum ProductWebPage {
                 </div>
                 <div class="cp-panel">
                   <div class="cp-panel-head"><h2>실적</h2><span class="cp-panel-note">월별 집계</span></div>
+                  <p id="performance-basis" class="cp-panel-note"></p>
                   <div id="performance-value" class="cp-hero-value"><strong>0원</strong><span>/ 0원</span></div>
                   <p id="remaining-value" class="cp-remaining">목표까지 <strong>0원</strong> 남았어요</p>
                   <div class="cp-progress" role="progressbar" id="performance-progress" aria-label="월 실적 진행도"><span></span></div>
@@ -469,6 +472,7 @@ enum ProductWebPage {
                 const selected = card();
                 $('#dashboard-title').textContent = selected.displayName;
                 $('#dashboard-meta').textContent = `${selected.issuerCode} · ${selected.lastFour}`;
+                $('#performance-basis').textContent = `산정 기준: ${selected.performanceCalculationBasis}`;
                 const performance = data.dashboard.performance;
                 const performanceValue = $('#performance-value');
                 performanceValue.classList.toggle('is-negative', performance.currentAmount < 0);
@@ -496,8 +500,10 @@ enum ProductWebPage {
                   const name = document.createElement('span'); name.textContent = value.label;
                   const amount = document.createElement('strong'); amount.textContent = `${won(value.receivedAmount)} / ${won(value.maximumAmount)}`;
                   label.append(name, amount);
+                  const definition = selected.benefits.find(benefit => benefit.id === value.id);
+                  const terms = document.createElement('p'); terms.className = 'cp-benefit-terms'; terms.textContent = definition ? benefitTerms(definition, false) : '';
                   const progress = document.createElement('div'); progress.className = 'cp-progress'; progress.setAttribute('role', 'progressbar'); progress.setAttribute('aria-label', value.label); progress.append(document.createElement('span'));
-                  setProgress(progress, value.receivedAmount, value.maximumAmount); wrap.append(label, progress); benefits.append(wrap);
+                  setProgress(progress, value.receivedAmount, value.maximumAmount); wrap.append(label, terms, progress); benefits.append(wrap);
                 });
                 if (data.dashboard.benefits.length === 0) {
                   const empty = document.createElement('p'); empty.className = 'cp-empty'; empty.textContent = '등록된 혜택이 없습니다.'; benefits.append(empty);
@@ -526,6 +532,16 @@ enum ProductWebPage {
                 if (transaction.amount == null) return 0;
                 const sign = transaction.kind === 'cancellation' ? -1 : 1;
                 return sign * Math.trunc(transaction.amount * benefit.rateBasisPoints / 10000);
+              }
+
+              function benefitTerms(benefit, includeTargets) {
+                const rate = benefit.rateBasisPoints / 100;
+                const values = [];
+                if (includeTargets) values.push(`대상: ${benefit.eligibleMerchants.join(' · ')}`);
+                values.push(`건당 ${won(benefit.minimumTransactionAmount)} 이상 · ${rate}% 캐시백`);
+                values.push(`전월 실적 ${won(benefit.requiredPreviousMonthPerformanceAmount)} 이상 · 월 ${won(benefit.maximumAmount)} 한도`);
+                benefit.exclusionNotes.forEach(note => values.push(`제외: ${note}`));
+                return values.join('\n');
               }
 
               function updateReviewPreview() {
@@ -575,10 +591,11 @@ enum ProductWebPage {
                   const row = document.createElement('div'); row.className = 'cp-check-row';
                   const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.id = `benefit-${benefit.id}`; checkbox.value = benefit.id; checkbox.checked = transaction.benefitIds.includes(benefit.id);
                   const label = document.createElement('label'); label.htmlFor = checkbox.id; label.textContent = benefit.label;
+                  const terms = document.createElement('p'); terms.className = 'cp-benefit-terms'; terms.textContent = benefitTerms(benefit, true);
                   const wrap = document.createElement('div'); wrap.className = 'cp-check-progress'; wrap.id = `benefit-progress-${benefit.id}`;
                   const metric = document.createElement('div'); metric.className = 'cp-metric-label'; const caption = document.createElement('span'); caption.textContent = '받은 혜택'; const amount = document.createElement('strong'); metric.append(caption, amount);
                   const progress = document.createElement('div'); progress.className = 'cp-progress'; progress.setAttribute('role', 'progressbar'); progress.setAttribute('aria-label', benefit.label); progress.append(document.createElement('span'));
-                  wrap.append(metric, progress); row.append(checkbox, label, wrap); benefits.append(row); checkbox.addEventListener('change', updateReviewPreview);
+                  wrap.append(metric, progress); row.append(checkbox, label, terms, wrap); benefits.append(row); checkbox.addEventListener('change', updateReviewPreview);
                 });
                 await showView('detail'); updateReviewPreview();
               }

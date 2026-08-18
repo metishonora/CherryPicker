@@ -17,7 +17,18 @@ final class CardTypeDefinitionPersistenceTests: XCTestCase {
         XCTAssertEqual(card.cardTypeCode, definition.code)
         XCTAssertEqual(card.issuerCode, definition.issuerCode)
         XCTAssertEqual(card.performanceTargetAmount, definition.defaultMonthlyPerformanceTargetAmount)
+        XCTAssertEqual(card.performanceCalculationBasis, "‘더나은’ 정상 이용금액")
         XCTAssertEqual(card.benefits.map(\.label), definition.benefits.map(\.label))
+        XCTAssertEqual(card.benefits.count, 3)
+        XCTAssertTrue(card.benefits.allSatisfy { $0.rateBasisPoints == 2_000 })
+        XCTAssertTrue(card.benefits.allSatisfy { $0.maximumAmount == 6_000 })
+        XCTAssertEqual(card.benefits.first?.minimumTransactionAmount, 10_000)
+        XCTAssertEqual(card.benefits.last?.minimumTransactionAmount, 5_000)
+        XCTAssertEqual(card.benefits.first?.requiredPreviousMonthPerformanceAmount, 300_000)
+        XCTAssertEqual(
+            card.benefits.first?.eligibleMerchants,
+            ["네이버페이", "카카오페이", "페이코"]
+        )
     }
 
     func testOwnedCardUpdateCannotMutateCardTypeIdentity() async throws {
