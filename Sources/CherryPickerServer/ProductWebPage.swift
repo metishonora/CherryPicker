@@ -105,7 +105,6 @@ enum ProductWebPage {
             .cp-panel h2, .cp-section h2 { margin: 0 0 18px; font-size: 18px; }
             .cp-panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
             .cp-panel-head h2 { margin: 0; }
-            .cp-panel-note { color: var(--cp-muted); font-size: 13px; }
             .cp-hero-value { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; }
             .cp-hero-value strong { font-size: clamp(30px, 8vw, 42px); line-height: 1.15; letter-spacing: -0.045em; font-variant-numeric: tabular-nums; }
             .cp-hero-value span { color: var(--cp-muted); font-weight: 650; }
@@ -137,7 +136,8 @@ enum ProductWebPage {
             .cp-progress span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--cp-accent); transition: width .18s ease; }
             .cp-benefit-progress + .cp-benefit-progress { margin-top: 20px; }
             .cp-benefit + .cp-benefit { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--cp-line); }
-            .cp-benefit-terms { margin: 7px 0 0; color: var(--cp-subtle); font-size: 14px; white-space: pre-line; }
+            .cp-benefit-name { color: var(--cp-text); font-size: 18px; font-weight: 750; line-height: 1.35; }
+            .cp-benefit-terms { margin: 10px 0 0; color: var(--cp-subtle); font-size: 14px; white-space: pre-line; }
             .cp-filter { display: flex; gap: 8px; margin: 0 0 20px; overflow-x: auto; }
             .cp-filter button {
               flex: 0 0 auto; padding: 9px 14px; border: 0; border-radius: 999px;
@@ -229,8 +229,7 @@ enum ProductWebPage {
                   <button type="button" data-month-step="1" aria-label="다음 달">›</button>
                 </div>
                 <div class="cp-panel">
-                  <div class="cp-panel-head"><h2>실적</h2><span class="cp-panel-note">월별 집계</span></div>
-                  <p id="performance-basis" class="cp-panel-note"></p>
+                  <div class="cp-panel-head"><h2>실적</h2></div>
                   <div id="performance-value" class="cp-hero-value"><strong>0원</strong><span>/ 0원</span></div>
                   <p id="remaining-value" class="cp-remaining">목표까지 <strong>0원</strong> 남았어요</p>
                   <div class="cp-progress" role="progressbar" id="performance-progress" aria-label="월 실적 진행도"><span></span></div>
@@ -247,7 +246,7 @@ enum ProductWebPage {
                   </details>
                 </div>
                 <div class="cp-panel">
-                  <div class="cp-panel-head"><h2>혜택</h2><span id="benefit-unconfirmed" class="cp-panel-note">혜택 미확인 0건</span></div>
+                  <div class="cp-panel-head"><h2>혜택</h2></div>
                   <div id="dashboard-benefits"></div>
                   <details class="cp-policy" id="benefit-exclusion-policy">
                     <summary>
@@ -471,7 +470,6 @@ enum ProductWebPage {
                 const selected = card();
                 $('#dashboard-title').textContent = selected.displayName;
                 $('#dashboard-meta').textContent = `${selected.issuerCode} · ${selected.lastFour}`;
-                $('#performance-basis').textContent = `산정 기준: ${selected.performanceCalculationBasis}`;
                 const performance = data.dashboard.performance;
                 const performanceValue = $('#performance-value');
                 performanceValue.classList.toggle('is-negative', performance.currentAmount < 0);
@@ -491,18 +489,17 @@ enum ProductWebPage {
                 setProgress($('#performance-progress'), performance.currentAmount, performance.targetAmount);
                 $('#excluded-value').textContent = won(performance.excludedAmount);
                 $('#unconfirmed-value').textContent = `${performance.unconfirmedCount}건 · ${won(performance.unconfirmedAmount)}`;
-                $('#benefit-unconfirmed').textContent = `혜택 미확인 ${data.dashboard.benefitUnconfirmedCount}건`;
                 const benefits = $('#dashboard-benefits'); benefits.replaceChildren();
                 data.dashboard.benefits.forEach(value => {
                   const wrap = document.createElement('div'); wrap.className = 'cp-benefit';
                   const label = document.createElement('div'); label.className = 'cp-metric-label';
-                  const name = document.createElement('span'); name.textContent = value.label;
+                  const name = document.createElement('span'); name.className = 'cp-benefit-name'; name.textContent = value.label;
                   const amount = document.createElement('strong'); amount.textContent = `${won(value.receivedAmount)} / ${won(value.maximumAmount)}`;
                   label.append(name, amount);
                   const definition = selected.benefits.find(benefit => benefit.id === value.id);
-                  const terms = document.createElement('p'); terms.className = 'cp-benefit-terms'; terms.textContent = definition ? benefitTerms(definition, false) : '';
+                  const terms = document.createElement('p'); terms.className = 'cp-benefit-terms'; terms.textContent = definition ? benefitTerms(definition) : '';
                   const progress = document.createElement('div'); progress.className = 'cp-progress'; progress.setAttribute('role', 'progressbar'); progress.setAttribute('aria-label', value.label); progress.append(document.createElement('span'));
-                  setProgress(progress, value.receivedAmount, value.maximumAmount); wrap.append(label, terms, progress); benefits.append(wrap);
+                  setProgress(progress, value.receivedAmount, value.maximumAmount); wrap.append(label, progress, terms); benefits.append(wrap);
                 });
                 if (data.dashboard.benefits.length === 0) {
                   const empty = document.createElement('p'); empty.className = 'cp-empty'; empty.textContent = '등록된 혜택이 없습니다.'; benefits.append(empty);
@@ -533,12 +530,8 @@ enum ProductWebPage {
                 return sign * Math.trunc(transaction.amount * benefit.rateBasisPoints / 10000);
               }
 
-              function benefitTerms(benefit, includeTargets) {
-                const rate = benefit.rateBasisPoints / 100;
-                const values = [];
-                if (includeTargets) values.push(`대상: ${benefit.eligibleMerchants.join(' · ')}`);
-                values.push(`건당 ${won(benefit.minimumTransactionAmount)} 이상 · ${rate}% 캐시백`);
-                values.push(`전월 실적 ${won(benefit.requiredPreviousMonthPerformanceAmount)} 이상 · 월 ${won(benefit.maximumAmount)} 한도`);
+              function benefitTerms(benefit) {
+                const values = [`건당 ${won(benefit.minimumTransactionAmount)} 이상`];
                 benefit.exclusionNotes.forEach(note => values.push(`제외: ${note}`));
                 return values.join('\n');
               }
