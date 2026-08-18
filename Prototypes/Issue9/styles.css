@@ -64,7 +64,6 @@ main { padding: 36px 24px 96px; }
 .benefit-card + .benefit-card { border-top: 1px solid var(--line); }
 .benefit-title { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; align-items: center; }
 .benefit-title h3 { margin: 0; font-size: 16px; letter-spacing: -.018em; }
-.benefit-title p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
 .benefit-title > strong { text-align: right; font-size: 15px; }
 .benefit-title small { color: var(--muted); font-weight: 550; }
 .benefit-detail { margin: 13px 0 0; }
