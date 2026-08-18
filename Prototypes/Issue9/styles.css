@@ -46,7 +46,6 @@ main { padding: 36px 24px 96px; }
 .panel-head h2 strong { font-size: 30px; }
 .panel-head h2 span { color: var(--muted); font-size: 18px; font-weight: 600; }
 .panel-head.compact { margin-bottom: 8px; }
-.panel-note { color: var(--muted); font-size: 13px; }
 
 .progress { height: 12px; margin-top: 18px; overflow: hidden; border-radius: 999px; background: var(--track); }
 .progress span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #e94d79, #ff7e9f); }
