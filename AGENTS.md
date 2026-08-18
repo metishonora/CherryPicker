@@ -20,11 +20,11 @@
 
 ## Prototype server lifecycle
 
-- Use only a launch command approved for the prototype. Do not introduce a framework or server dependency solely to make a prototype runnable.
-- Use port `11000 + the GitHub issue number` for an issue prototype (for example, issue #5 uses port `11005`) so concurrent issue worktrees do not collide. Bind the synthetic prototype server to `0.0.0.0` when Tailscale browser review is requested, and report its Tailscale IPv4 URL.
-- Record enough process ownership information to stop only the server started for the current worktree. Never terminate an unverified process by name or port.
+- For requested prototype servers, use `web_server_operator` when available; otherwise invoke the shared manager directly with the manifest-approved `prototype` profile. Agent unavailability must not block server operations.
+- Use only `node Scripts/test-server-manager.mjs` for prototype-server start, status, keep, release, reconcile, and stop operations. Do not improvise Python HTTP server, detached-process, port-selection, or process-termination commands.
+- `.codex/web-server.json` owns the approved launch command, issue-derived port policy, `0.0.0.0` binding, process ownership, logs, HTTP verification, and Tailscale IPv4 URL.
+- Never terminate a process not recorded and verified by the shared manager.
 - Stop a session-owned prototype server on the next user turn by default. Preserve it only when the user explicitly requests continued operation.
-- Add shared server-manager scripts, lifecycle hooks, or a dedicated operator agent only when an issue demonstrates the need and the user approves the expanded operational scope.
 
 ## Verification
 
@@ -33,6 +33,7 @@
 - For `CherryPickerCore` changes, run `DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer swift test`.
 - For server, HTTP, SQLite, or Swift package changes, run the full Swift package test suite.
 - For operational script changes, run shell syntax checks, template validation, and fixture-only validation before installation.
+- Changes to the managed server manifest or shared lifecycle integration require the shared lifecycle tests and a real prototype start/HTTP/stop smoke test.
 - Require explicit user approval before changing Tailscale Serve or using real message data.
 
 ## Completion
