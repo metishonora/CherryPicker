@@ -32,6 +32,8 @@ enum ProductWebPage {
               --cp-accent-soft: light-dark(#fff0f4, #3a2028);
               --cp-track: light-dark(#e5e8eb, #333a43);
               --cp-danger: light-dark(#d52f4c, #ff7990);
+              --cp-warning: light-dark(#946200, #e8ba64);
+              --cp-negative: light-dark(#a53b53, #ff8da6);
             }
 
             * { box-sizing: border-box; }
@@ -57,7 +59,7 @@ enum ProductWebPage {
             .cp-brand strong { font-size: 20px; font-weight: 700; }
             .cp-brand span { color: var(--cp-muted); font-size: 13px; }
             .cp-card-select {
-              min-width: 180px; max-width: 52%; padding: 10px 34px 10px 12px;
+              min-width: 220px; max-width: 58%; padding: 10px 34px 10px 12px;
               border: 0; border-radius: 12px; background: var(--cp-soft); font-size: 16px;
             }
             .cp-nav {
@@ -74,6 +76,13 @@ enum ProductWebPage {
             .cp-heading h1 { margin: 0; font-size: clamp(26px, 6vw, 34px); line-height: 1.25; letter-spacing: -0.04em; }
             .cp-heading p { margin: 10px 0 0; color: var(--cp-subtle); }
             .cp-accent { color: var(--cp-accent); }
+            .cp-period {
+              display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center;
+              gap: 10px; margin-bottom: 18px; padding: 8px; border-radius: 16px; background: var(--cp-soft);
+            }
+            .cp-period strong { text-align: center; font-size: 18px; }
+            .cp-period button { width: 44px; height: 44px; border: 0; border-radius: 12px; background: var(--cp-surface); font-size: 25px; line-height: 1; }
+            .cp-period button:disabled { cursor: default; opacity: .34; }
             .cp-list { border-top: 1px solid var(--cp-line); }
             .cp-row {
               width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto;
@@ -86,17 +95,48 @@ enum ProductWebPage {
             .cp-row-merchant { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
             .cp-row-side { justify-items: end; align-content: center; }
             .cp-row-amount { font-size: 18px; font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }
+            .cp-row-amount.is-cancellation { color: var(--cp-negative); }
             .cp-status { color: var(--cp-subtle); font-size: 13px; }
+            .cp-status.is-unconfirmed { color: var(--cp-warning); }
             .cp-empty, .cp-error { padding: 48px 0; color: var(--cp-subtle); text-align: center; }
             .cp-error { color: var(--cp-danger); }
             .cp-panel { padding: 22px; border-radius: 20px; background: var(--cp-soft); }
             .cp-panel + .cp-panel, .cp-section + .cp-section { margin-top: 18px; }
             .cp-panel h2, .cp-section h2 { margin: 0 0 18px; font-size: 18px; }
+            .cp-panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
+            .cp-panel-head h2 { margin: 0; }
+            .cp-panel-note { color: var(--cp-muted); font-size: 13px; }
+            .cp-hero-value { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; }
+            .cp-hero-value strong { font-size: clamp(30px, 8vw, 42px); line-height: 1.15; letter-spacing: -0.045em; font-variant-numeric: tabular-nums; }
+            .cp-hero-value span { color: var(--cp-muted); font-weight: 650; }
+            .cp-hero-value.is-negative strong { color: var(--cp-negative); }
+            .cp-remaining { margin: 9px 0 0; color: var(--cp-subtle); }
+            .cp-remaining strong { color: var(--cp-accent); }
+            .cp-breakdown { margin: 22px 0 0; padding: 0; border-top: 1px solid var(--cp-line); }
+            .cp-breakdown > div { display: flex; justify-content: space-between; gap: 16px; padding-top: 14px; }
+            .cp-breakdown dt { color: var(--cp-subtle); }
+            .cp-breakdown dd { margin: 0; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+            .cp-unconfirmed { color: var(--cp-warning); }
+            .cp-policy { margin-top: 22px; border-top: 1px solid var(--cp-line); }
+            .cp-policy summary {
+              display: flex; align-items: center; justify-content: space-between; gap: 16px;
+              padding-top: 17px; cursor: pointer; list-style: none; font-weight: 700;
+            }
+            .cp-policy summary::-webkit-details-marker { display: none; }
+            .cp-policy-summary-meta { display: flex; align-items: center; gap: 9px; color: var(--cp-muted); font-size: 13px; font-weight: 600; }
+            .cp-policy-chevron { display: inline-block; font-size: 18px; line-height: 1; transition: transform .18s ease; }
+            .cp-policy[open] .cp-policy-chevron { transform: rotate(180deg); }
+            .cp-policy-list { margin: 14px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--cp-line); }
+            .cp-policy-list li { display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: 8px; padding: 13px 0; color: var(--cp-subtle); }
+            .cp-policy-list li + li { border-top: 1px solid var(--cp-line); }
+            .cp-policy-list li::before { content: "·"; color: var(--cp-muted); font-weight: 800; }
             .cp-metric-label { display: flex; justify-content: space-between; gap: 16px; color: var(--cp-subtle); }
+            .cp-metric-label span { min-width: 0; }
             .cp-metric-label strong { color: var(--cp-text); font-variant-numeric: tabular-nums; }
             .cp-progress { height: 12px; margin-top: 12px; overflow: hidden; border-radius: 999px; background: var(--cp-track); }
             .cp-progress span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--cp-accent); transition: width .18s ease; }
             .cp-benefit-progress + .cp-benefit-progress { margin-top: 20px; }
+            .cp-benefit + .cp-benefit { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--cp-line); }
             .cp-filter { display: flex; gap: 8px; margin: 0 0 20px; overflow-x: auto; }
             .cp-filter button {
               flex: 0 0 auto; padding: 9px 14px; border: 0; border-radius: 999px;
@@ -151,6 +191,9 @@ enum ProductWebPage {
               .cp-card-select { width: 100%; max-width: none; }
               .cp-main { padding: 28px 18px 100px; }
               .cp-panel { padding: 18px; }
+              .cp-panel-head { align-items: center; }
+              #view-dashboard .cp-metric-label { display: grid; gap: 3px; }
+              #view-dashboard .cp-metric-label strong { justify-self: start; }
               .cp-actions { grid-template-columns: 1fr 1.25fr; }
             }
             @media (prefers-reduced-motion: reduce) { .cp-progress span { transition: none; } }
@@ -179,19 +222,48 @@ enum ProductWebPage {
 
               <section id="view-dashboard" hidden>
                 <div class="cp-heading"><h1 id="dashboard-title">카드 대시보드</h1><p id="dashboard-meta"></p></div>
-                <div class="cp-panel">
-                  <h2>이번 달 실적</h2>
-                  <div class="cp-metric-label"><span>달성 실적</span><strong id="performance-value">0원 / 0원</strong></div>
-                  <div class="cp-progress" role="progressbar" id="performance-progress" aria-label="이번 달 카드 실적"><span></span></div>
+                <div class="cp-period" data-period-control>
+                  <button type="button" data-month-step="-1" aria-label="이전 달">‹</button>
+                  <strong data-period-label></strong>
+                  <button type="button" data-month-step="1" aria-label="다음 달">›</button>
                 </div>
                 <div class="cp-panel">
-                  <h2>이번 달 혜택</h2>
+                  <div class="cp-panel-head"><h2>실적</h2><span class="cp-panel-note">월별 집계</span></div>
+                  <div id="performance-value" class="cp-hero-value"><strong>0원</strong><span>/ 0원</span></div>
+                  <p id="remaining-value" class="cp-remaining">목표까지 <strong>0원</strong> 남았어요</p>
+                  <div class="cp-progress" role="progressbar" id="performance-progress" aria-label="월 실적 진행도"><span></span></div>
+                  <dl class="cp-breakdown">
+                    <div><dt>실적 제외</dt><dd id="excluded-value">0원</dd></div>
+                    <div><dt>미확인 거래</dt><dd id="unconfirmed-value" class="cp-unconfirmed">0건 · 0원</dd></div>
+                  </dl>
+                  <details class="cp-policy" id="performance-exclusion-policy">
+                    <summary>
+                      <span>실적 제외 항목</span>
+                      <span class="cp-policy-summary-meta"><span id="performance-exclusion-count">0개</span><span class="cp-policy-chevron" aria-hidden="true">⌄</span></span>
+                    </summary>
+                    <ul class="cp-policy-list" id="performance-exclusion-list"></ul>
+                  </details>
+                </div>
+                <div class="cp-panel">
+                  <div class="cp-panel-head"><h2>혜택</h2><span id="benefit-unconfirmed" class="cp-panel-note">혜택 미확인 0건</span></div>
                   <div id="dashboard-benefits"></div>
+                  <details class="cp-policy" id="benefit-exclusion-policy">
+                    <summary>
+                      <span>혜택 제외 항목</span>
+                      <span class="cp-policy-summary-meta"><span id="benefit-exclusion-count">0개</span><span class="cp-policy-chevron" aria-hidden="true">⌄</span></span>
+                    </summary>
+                    <ul class="cp-policy-list" id="benefit-exclusion-list"></ul>
+                  </details>
                 </div>
               </section>
 
               <section id="view-transactions" hidden>
-                <div class="cp-heading"><h1>카드 거래</h1><p id="transactions-meta"></p></div>
+                <div class="cp-heading"><h1 id="transactions-title">카드 거래</h1><p id="transactions-meta"></p></div>
+                <div class="cp-period" data-period-control>
+                  <button type="button" data-month-step="-1" aria-label="이전 달">‹</button>
+                  <strong data-period-label></strong>
+                  <button type="button" data-month-step="1" aria-label="다음 달">›</button>
+                </div>
                 <div class="cp-filter" aria-label="거래 필터">
                   <button type="button" data-filter="all" aria-pressed="true">전체</button>
                   <button type="button" data-filter="approval" aria-pressed="false">승인</button>
@@ -260,13 +332,44 @@ enum ProductWebPage {
 
           <script>
             (() => {
-              const state = { cards: [], selectedCardId: null, view: 'inbox', filter: 'all', activeTransaction: null, dashboard: null, returnView: 'inbox' };
               const $ = selector => document.querySelector(selector);
               const $$ = selector => Array.from(document.querySelectorAll(selector));
               const won = value => value == null ? '금액 미상' : `${Number(value).toLocaleString('ko-KR')}원`;
               const kindLabel = value => value === 'approval' ? '승인' : value === 'cancellation' ? '취소' : '종류 미상';
-              const dateLabel = value => value ? new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '일시 미상';
+              const dateLabel = value => value ? new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(new Date(value)) : '일시 미상';
+              const monthKeyForDate = value => {
+                const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit' }).formatToParts(new Date(value));
+                const part = type => parts.find(value => value.type === type)?.value;
+                return `${part('year')}-${part('month')}`;
+              };
+              const currentMonth = monthKeyForDate(new Date());
+              const state = { cards: [], selectedCardId: null, view: 'inbox', filter: 'all', month: currentMonth, activeTransaction: null, dashboard: null, returnView: 'inbox' };
               const card = () => state.cards.find(value => value.id === state.selectedCardId);
+
+              function shiftedMonth(value, offset) {
+                const [year, month] = value.split('-').map(Number);
+                const shifted = new Date(Date.UTC(year, month - 1 + offset, 1));
+                return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, '0')}`;
+              }
+
+              function monthLabel(value) {
+                const [year, month] = value.split('-').map(Number);
+                return `${year}년 ${month}월`;
+              }
+
+              function syncPeriodControls() {
+                $$('[data-period-label]').forEach(value => { value.textContent = monthLabel(state.month); });
+                $$('[data-month-step="1"]').forEach(value => { value.disabled = state.month >= currentMonth; });
+              }
+
+              function renderPolicyList(type, items) {
+                $(`#${type}-exclusion-count`).textContent = `${items.length}개`;
+                const list = $(`#${type}-exclusion-list`);
+                list.replaceChildren(...items.map(item => {
+                  const row = document.createElement('li'); row.textContent = item; return row;
+                }));
+                $(`#${type}-exclusion-policy`).hidden = items.length === 0;
+              }
 
               async function api(path, options = {}) {
                 const headers = new Headers(options.headers || {});
@@ -330,8 +433,8 @@ enum ProductWebPage {
                 const meta = document.createElement('span'); meta.className = 'cp-row-meta'; meta.textContent = `${kindLabel(transaction.kind)} · ${dateLabel(transaction.occurredAt)}`;
                 main.append(merchant, meta);
                 const side = document.createElement('span'); side.className = 'cp-row-side';
-                const amount = document.createElement('span'); amount.className = 'cp-row-amount'; amount.textContent = won(transaction.amount);
-                const status = document.createElement('span'); status.className = 'cp-status'; status.textContent = transaction.aggregationExcluded ? '집계 제외' : transaction.reviewStatus === 'unreviewed' ? '미확인' : '확인';
+                const amount = document.createElement('span'); amount.className = `cp-row-amount${transaction.kind === 'cancellation' ? ' is-cancellation' : ''}`; amount.textContent = `${transaction.kind === 'cancellation' ? '−' : ''}${won(transaction.amount)}`;
+                const status = document.createElement('span'); status.className = `cp-status${transaction.reviewStatus === 'unreviewed' ? ' is-unconfirmed' : ''}`; status.textContent = transaction.aggregationExcluded ? '집계 제외' : transaction.reviewStatus === 'unreviewed' ? '미확인' : '확인';
                 side.append(amount, status); button.append(main, side);
                 button.addEventListener('click', () => openDetail(transaction.id));
                 return button;
@@ -354,22 +457,41 @@ enum ProductWebPage {
 
               function setProgress(element, current, maximum) {
                 const percent = maximum > 0 ? Math.max(0, Math.min(100, current / maximum * 100)) : 0;
-                element.setAttribute('aria-valuemin', '0'); element.setAttribute('aria-valuemax', String(maximum)); element.setAttribute('aria-valuenow', String(current));
+                element.setAttribute('aria-valuemin', String(Math.min(0, current))); element.setAttribute('aria-valuemax', String(maximum)); element.setAttribute('aria-valuenow', String(current));
                 element.querySelector('span').style.width = `${percent}%`;
               }
 
               async function loadDashboard() {
                 if (!state.selectedCardId) return showView('inbox');
-                const data = await api(`/api/v1/cards/${state.selectedCardId}/dashboard`);
+                syncPeriodControls();
+                const data = await api(`/api/v1/cards/${state.selectedCardId}/dashboard?month=${state.month}`);
                 state.dashboard = data.dashboard;
                 const selected = card();
                 $('#dashboard-title').textContent = selected.displayName;
                 $('#dashboard-meta').textContent = `${selected.issuerCode} · ${selected.lastFour}`;
-                $('#performance-value').textContent = `${won(data.dashboard.performance.currentAmount)} / ${won(data.dashboard.performance.targetAmount)}`;
-                setProgress($('#performance-progress'), data.dashboard.performance.currentAmount, data.dashboard.performance.targetAmount);
+                const performance = data.dashboard.performance;
+                const performanceValue = $('#performance-value');
+                performanceValue.classList.toggle('is-negative', performance.currentAmount < 0);
+                performanceValue.replaceChildren();
+                const current = document.createElement('strong'); current.textContent = won(performance.currentAmount);
+                const target = document.createElement('span'); target.textContent = `/ ${won(performance.targetAmount)}`;
+                performanceValue.append(current, target);
+                $('#remaining-value').replaceChildren();
+                if (performance.remainingAmount > 0) {
+                  $('#remaining-value').append('목표까지 ');
+                  const remaining = document.createElement('strong'); remaining.textContent = won(performance.remainingAmount);
+                  $('#remaining-value').append(remaining, ' 남았어요');
+                } else {
+                  const achieved = document.createElement('strong'); achieved.textContent = '목표를 달성했어요';
+                  $('#remaining-value').append(achieved);
+                }
+                setProgress($('#performance-progress'), performance.currentAmount, performance.targetAmount);
+                $('#excluded-value').textContent = won(performance.excludedAmount);
+                $('#unconfirmed-value').textContent = `${performance.unconfirmedCount}건 · ${won(performance.unconfirmedAmount)}`;
+                $('#benefit-unconfirmed').textContent = `혜택 미확인 ${data.dashboard.benefitUnconfirmedCount}건`;
                 const benefits = $('#dashboard-benefits'); benefits.replaceChildren();
                 data.dashboard.benefits.forEach(value => {
-                  const wrap = document.createElement('div'); wrap.className = 'cp-benefit-progress';
+                  const wrap = document.createElement('div'); wrap.className = 'cp-benefit';
                   const label = document.createElement('div'); label.className = 'cp-metric-label';
                   const name = document.createElement('span'); name.textContent = value.label;
                   const amount = document.createElement('strong'); amount.textContent = `${won(value.receivedAmount)} / ${won(value.maximumAmount)}`;
@@ -377,12 +499,19 @@ enum ProductWebPage {
                   const progress = document.createElement('div'); progress.className = 'cp-progress'; progress.setAttribute('role', 'progressbar'); progress.setAttribute('aria-label', value.label); progress.append(document.createElement('span'));
                   setProgress(progress, value.receivedAmount, value.maximumAmount); wrap.append(label, progress); benefits.append(wrap);
                 });
+                if (data.dashboard.benefits.length === 0) {
+                  const empty = document.createElement('p'); empty.className = 'cp-empty'; empty.textContent = '등록된 혜택이 없습니다.'; benefits.append(empty);
+                }
+                renderPolicyList('performance', selected.performanceExclusions || []);
+                renderPolicyList('benefit', selected.benefitExclusions || []);
               }
 
               async function loadTransactions() {
                 if (!state.selectedCardId) return showView('inbox');
+                syncPeriodControls();
                 const selected = card(); $('#transactions-meta').textContent = `${selected.displayName} · ${selected.lastFour}`;
-                const data = await api(`/api/v1/cards/${state.selectedCardId}/transactions?filter=${state.filter}`);
+                const data = await api(`/api/v1/cards/${state.selectedCardId}/transactions?filter=${state.filter}&month=${state.month}`);
+                $('#transactions-title').textContent = `${Number(state.month.slice(5))}월 거래 ${data.transactions.length}건`;
                 const list = $('#transaction-list'); list.replaceChildren(...data.transactions.map(value => transactionRow(value, false)));
                 $('#transaction-empty').hidden = data.transactions.length !== 0;
               }
@@ -416,7 +545,7 @@ enum ProductWebPage {
                 selectedCard.benefits.forEach(benefit => {
                   const checkbox = document.getElementById(`benefit-${benefit.id}`);
                   const progressWrap = document.getElementById(`benefit-progress-${benefit.id}`);
-                  let received = dashboard.benefits.find(value => value.id === benefit.id)?.receivedAmount || 0;
+                  let received = dashboard.benefits.find(value => value.id === benefit.id)?.calculationAmount || 0;
                   if (transaction.reviewStatus === 'reviewed' && !transaction.aggregationExcluded && transaction.benefitIds.includes(benefit.id)) received -= benefitContribution(transaction, benefit);
                   if (!excluded && checkbox.checked) received += benefitContribution(transaction, benefit);
                   received = Math.max(0, Math.min(benefit.maximumAmount, received));
@@ -431,8 +560,9 @@ enum ProductWebPage {
                 state.returnView = state.view;
                 const data = await api(`/api/v1/transactions/${id}`); state.activeTransaction = data.transaction;
                 state.selectedCardId = data.transaction.cardId; $('#card-selector').value = state.selectedCardId; setCardNavigationVisible(true);
-                const dashboardData = await api(`/api/v1/cards/${state.selectedCardId}/dashboard`); state.dashboard = dashboardData.dashboard;
                 const transaction = data.transaction, selectedCard = card();
+                state.month = monthKeyForDate(transaction.occurredAt);
+                const dashboardData = await api(`/api/v1/cards/${state.selectedCardId}/dashboard?month=${state.month}`); state.dashboard = dashboardData.dashboard;
                 $('#detail-card').textContent = `${transaction.cardDisplayName} · ${transaction.cardLastFour}`;
                 $('#detail-amount').textContent = won(transaction.amount); $('#detail-merchant').textContent = transaction.merchant || '확인 필요';
                 $('#detail-kind').textContent = kindLabel(transaction.kind); $('#detail-date').textContent = dateLabel(transaction.occurredAt);
@@ -470,9 +600,15 @@ enum ProductWebPage {
                 await showView(button.dataset.view);
               }));
               $('#card-selector').addEventListener('change', async event => {
-                state.selectedCardId = event.target.value || null; setCardNavigationVisible(Boolean(state.selectedCardId));
+                state.selectedCardId = event.target.value || null; state.month = currentMonth; setCardNavigationVisible(Boolean(state.selectedCardId));
                 await showView(state.selectedCardId ? 'dashboard' : 'inbox');
               });
+              $$('[data-month-step]').forEach(button => button.addEventListener('click', async () => {
+                const next = shiftedMonth(state.month, Number(button.dataset.monthStep));
+                state.month = next > currentMonth ? currentMonth : next;
+                if (state.view === 'dashboard') await loadDashboard();
+                if (state.view === 'transactions') await loadTransactions();
+              }));
               $$('.cp-filter button').forEach(button => button.addEventListener('click', async () => {
                 state.filter = button.dataset.filter; $$('.cp-filter button').forEach(value => value.setAttribute('aria-pressed', String(value === button))); await loadTransactions();
               }));

@@ -1,5 +1,6 @@
 import Foundation
 import Hummingbird
+import CherryPickerCore
 
 /// Hummingbird adapter for the CherryPicker local product server.
 ///
@@ -112,18 +113,21 @@ public struct CherryPickerHTTPApplication {
             }
             let filter = request.uri.queryParameters["filter"].map(String.init)
             do {
+                let month = try Self.dashboardMonth(from: request)
                 guard try await store.managedCard(id: id) != nil else {
                     return Self.notFoundResponse()
                 }
                 let transactions = try await store.managedTransactions(
                     cardID: id,
-                    filter: filter
+                    filter: filter,
+                    period: try month.interval
                 )
                 return Self.jsonResponse(
                     status: .ok,
                     data: try codec.encode(TransactionsResponse(transactions: transactions))
                 )
-            } catch ManagementStoreError.invalidInput {
+            } catch ManagementStoreError.invalidInput, DashboardMonthError.invalidIdentifier,
+                    DashboardMonthError.unresolvedInterval {
                 return Self.badRequestResponse()
             } catch {
                 return Self.internalErrorResponse()
@@ -138,13 +142,16 @@ public struct CherryPickerHTTPApplication {
                 return Self.badRequestResponse()
             }
             do {
-                guard let dashboard = try await store.dashboard(cardID: id) else {
+                let month = try Self.dashboardMonth(from: request)
+                guard let dashboard = try await store.dashboard(cardID: id, month: month) else {
                     return Self.notFoundResponse()
                 }
                 return Self.jsonResponse(
                     status: .ok,
                     data: try codec.encode(DashboardResponse(dashboard: dashboard))
                 )
+            } catch DashboardMonthError.invalidIdentifier, DashboardMonthError.unresolvedInterval {
+                return Self.badRequestResponse()
             } catch {
                 return Self.internalErrorResponse()
             }
@@ -314,6 +321,13 @@ public struct CherryPickerHTTPApplication {
 
     private static func hasValidCSRFHeader(_ request: Request) -> Bool {
         request.headers[.init("X-CherryPicker-CSRF")!] == "same-origin"
+    }
+
+    private static func dashboardMonth(from request: Request) throws -> DashboardMonth {
+        if let value = request.uri.queryParameters["month"].map(String.init) {
+            return try DashboardMonth(identifier: value)
+        }
+        return try DashboardMonth(containing: Date())
     }
 
 }

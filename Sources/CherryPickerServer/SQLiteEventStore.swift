@@ -347,7 +347,8 @@ public actor SQLiteEventStore {
     public func managedTransactions(
         scope: String? = nil,
         cardID: UUID? = nil,
-        filter: String? = nil
+        filter: String? = nil,
+        period: DateInterval? = nil
     ) throws -> [ManagedTransaction] {
         var clauses: [String] = []
         var bindings: [String] = []
@@ -392,7 +393,15 @@ public actor SQLiteEventStore {
         for (offset, value) in bindings.enumerated() {
             try bindText(value, to: statement, at: Int32(offset + 1))
         }
-        return try decodeManagedTransactions(from: statement)
+        let transactions = try decodeManagedTransactions(from: statement)
+        guard let period else { return transactions }
+        return transactions
+            .filter { $0.occurredAt >= period.start && $0.occurredAt < period.end }
+            .sorted {
+                if $0.occurredAt != $1.occurredAt { return $0.occurredAt > $1.occurredAt }
+                if $0.capturedAt != $1.capturedAt { return $0.capturedAt > $1.capturedAt }
+                return $0.id.uuidString > $1.id.uuidString
+            }
     }
 
     public func managedTransaction(id: UUID) throws -> ManagedTransaction? {
@@ -489,45 +498,59 @@ public actor SQLiteEventStore {
         return try managedTransaction(id: id)
     }
 
-    public func dashboard(cardID: UUID) throws -> CardDashboard? {
+    public func dashboard(cardID: UUID, month: DashboardMonth) throws -> CardDashboard? {
         guard let card = try managedCard(id: cardID) else { return nil }
-        let transactions = try managedTransactions(cardID: cardID)
-        var performanceAmount = 0
-        var benefitAmounts = Dictionary(uniqueKeysWithValues: card.benefits.map { ($0.id, 0) })
-
-        for transaction in transactions where isInCurrentSeoulMonth(transaction.occurredAt) {
-            guard
-                transaction.reviewStatus == .reviewed,
-                !transaction.aggregationExcluded,
-                let amount = transaction.amount
-            else { continue }
-            let sign = transaction.kind == "cancellation" ? -1 : 1
-            if transaction.performance == .included {
-                performanceAmount += sign * amount
+        let period = try month.interval
+        let transactions = try managedTransactions(cardID: cardID, period: period)
+        let calculation = MonthlyDashboardCalculator().calculate(
+            period: period,
+            targetAmount: card.performanceTargetAmount,
+            benefits: card.benefits.map {
+                DashboardBenefitDefinition(
+                    id: $0.id,
+                    rateBasisPoints: $0.rateBasisPoints,
+                    maximumAmount: $0.maximumAmount
+                )
+            },
+            transactions: transactions.map {
+                DashboardTransactionInput(
+                    occurredAt: $0.occurredAt,
+                    isReviewed: $0.reviewStatus == .reviewed,
+                    aggregationExcluded: $0.aggregationExcluded,
+                    kind: $0.kind == "cancellation" ? .cancellation :
+                        $0.kind == "approval" ? .approval : nil,
+                    amount: $0.amount,
+                    performance: $0.performance == .included ? .included :
+                        $0.performance == .excluded ? .excluded : nil,
+                    benefitIDs: Set($0.benefitIds)
+                )
             }
-            for benefitID in transaction.benefitIds {
-                guard let benefit = card.benefits.first(where: { $0.id == benefitID }) else {
-                    continue
-                }
-                benefitAmounts[benefitID, default: 0] += sign * amount * benefit.rateBasisPoints / 10_000
-            }
-        }
+        )
 
         let progress = card.benefits.map { benefit in
             BenefitProgress(
                 id: benefit.id,
                 label: benefit.label,
-                receivedAmount: max(0, min(benefit.maximumAmount, benefitAmounts[benefit.id, default: 0])),
+                calculationAmount: calculation.benefits.first {
+                    $0.id == benefit.id
+                }?.calculationAmount ?? 0,
+                receivedAmount: calculation.benefits.first { $0.id == benefit.id }?.receivedAmount ?? 0,
                 maximumAmount: benefit.maximumAmount
             )
         }
         return CardDashboard(
             cardId: card.id,
+            period: month.identifier,
             performance: PerformanceProgress(
-                currentAmount: performanceAmount,
-                targetAmount: card.performanceTargetAmount
+                currentAmount: calculation.performance.currentAmount,
+                targetAmount: card.performanceTargetAmount,
+                remainingAmount: calculation.performance.remainingAmount,
+                excludedAmount: calculation.performance.excludedAmount,
+                unconfirmedAmount: calculation.performance.unconfirmedAmount,
+                unconfirmedCount: calculation.performance.unconfirmedCount
             ),
-            benefits: progress
+            benefits: progress,
+            benefitUnconfirmedCount: calculation.benefitUnconfirmedCount
         )
     }
 
@@ -547,8 +570,32 @@ public actor SQLiteEventStore {
             issuerCode: issuerCode,
             lastFour: lastFour,
             performanceTargetAmount: Int(sqlite3_column_int64(statement, 4)),
-            benefits: try benefits(cardID: id)
+            benefits: try benefits(cardID: id),
+            performanceExclusions: try exclusions(cardID: id, kind: "performance"),
+            benefitExclusions: try exclusions(cardID: id, kind: "benefit")
         )
+    }
+
+    private func exclusions(cardID: UUID, kind: String) throws -> [String] {
+        let statement = try prepare("""
+            SELECT label
+            FROM card_exclusions
+            WHERE card_id = ? AND kind = ?
+            ORDER BY sort_order ASC
+            """)
+        defer { sqlite3_finalize(statement) }
+        try bindText(cardID.uuidString, to: statement, at: 1)
+        try bindText(kind, to: statement, at: 2)
+        var values: [String] = []
+        while true {
+            let result = sqlite3_step(statement)
+            if result == SQLITE_DONE { break }
+            guard result == SQLITE_ROW, let label = columnString(statement, at: 0) else {
+                throw SQLiteEventStoreError.invalidStoredValue("card exclusion")
+            }
+            values.append(label)
+        }
+        return values
     }
 
     private func benefits(cardID: UUID) throws -> [CardBenefit] {
@@ -697,14 +744,6 @@ public actor SQLiteEventStore {
         return values
     }
 
-    private func isInCurrentSeoulMonth(_ date: Date) -> Bool {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "Asia/Seoul")!
-        let now = calendar.dateComponents([.year, .month], from: Date())
-        let value = calendar.dateComponents([.year, .month], from: date)
-        return now.year == value.year && now.month == value.month
-    }
-
     private func transactionValue(id: UUID) throws -> StoredTransaction? {
         let statement = try prepare("""
             SELECT id, captured_at, original_message, parse_status,
@@ -790,6 +829,16 @@ public actor SQLiteEventStore {
             )
             """, database: database)
         try execute("""
+            CREATE TABLE IF NOT EXISTS card_exclusions (
+                card_id TEXT NOT NULL,
+                kind TEXT NOT NULL CHECK(kind IN ('performance', 'benefit')),
+                label TEXT NOT NULL,
+                sort_order INTEGER NOT NULL,
+                PRIMARY KEY(card_id, kind, sort_order),
+                FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE
+            )
+            """, database: database)
+        try execute("""
             CREATE TABLE IF NOT EXISTS transaction_cards (
                 transaction_id TEXT PRIMARY KEY NOT NULL,
                 card_id TEXT NOT NULL,
@@ -833,6 +882,36 @@ public actor SQLiteEventStore {
                 '커피 10% 할인', 1000, 5000, 0
             )
             """, database: database)
+        let performanceExclusions = [
+            "세금 및 공과금",
+            "아파트 관리비",
+            "대학 등록금",
+            "상품권·선불카드 충전"
+        ]
+        let benefitExclusions = [
+            "무이자 할부 거래",
+            "상품권 및 기프트카드 구매",
+            "포인트·쿠폰 사용분",
+            "일부 임대매장 및 백화점 입점 매장"
+        ]
+        for (sortOrder, label) in performanceExclusions.enumerated() {
+            try insertCardExclusion(
+                database: database,
+                cardID: defaultCardID,
+                kind: "performance",
+                label: label,
+                sortOrder: sortOrder
+            )
+        }
+        for (sortOrder, label) in benefitExclusions.enumerated() {
+            try insertCardExclusion(
+                database: database,
+                cardID: defaultCardID,
+                kind: "benefit",
+                label: label,
+                sortOrder: sortOrder
+            )
+        }
         try execute("""
             INSERT OR IGNORE INTO card_benefits (
                 id, card_id, label, rate_basis_points, maximum_amount, sort_order
@@ -853,6 +932,52 @@ public actor SQLiteEventStore {
             CREATE INDEX IF NOT EXISTS idx_transactions_fingerprint_captured_at
             ON canonical_transactions(fingerprint, captured_at)
             """, database: database)
+        try execute("""
+            CREATE INDEX IF NOT EXISTS idx_transaction_cards_card_id
+            ON transaction_cards(card_id)
+            """, database: database)
+        try execute("PRAGMA optimize", database: database)
+    }
+
+    private static func insertCardExclusion(
+        database: OpaquePointer,
+        cardID: UUID,
+        kind: String,
+        label: String,
+        sortOrder: Int
+    ) throws {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(
+            database,
+            """
+            INSERT OR IGNORE INTO card_exclusions (card_id, kind, label, sort_order)
+            VALUES (?, ?, ?, ?)
+            """,
+            -1,
+            &statement,
+            nil
+        ) == SQLITE_OK, let statement else {
+            throw SQLiteEventStoreError.schema(String(cString: sqlite3_errmsg(database)))
+        }
+        defer { sqlite3_finalize(statement) }
+        let cardIDResult = cardID.uuidString.withCString {
+            sqlite3_bind_text(statement, 1, $0, -1, sqliteTransient)
+        }
+        let kindResult = kind.withCString {
+            sqlite3_bind_text(statement, 2, $0, -1, sqliteTransient)
+        }
+        let labelResult = label.withCString {
+            sqlite3_bind_text(statement, 3, $0, -1, sqliteTransient)
+        }
+        guard
+            cardIDResult == SQLITE_OK,
+            kindResult == SQLITE_OK,
+            labelResult == SQLITE_OK,
+            sqlite3_bind_int64(statement, 4, sqlite3_int64(sortOrder)) == SQLITE_OK,
+            sqlite3_step(statement) == SQLITE_DONE
+        else {
+            throw SQLiteEventStoreError.schema(String(cString: sqlite3_errmsg(database)))
+        }
     }
 
     private func beginTransaction() throws {

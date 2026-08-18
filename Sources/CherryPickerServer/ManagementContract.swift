@@ -21,6 +21,8 @@ public struct ManagedCard: Codable, Equatable, Sendable {
     public let lastFour: String
     public let performanceTargetAmount: Int
     public let benefits: [CardBenefit]
+    public let performanceExclusions: [String]
+    public let benefitExclusions: [String]
 
     public init(
         id: UUID,
@@ -28,7 +30,9 @@ public struct ManagedCard: Codable, Equatable, Sendable {
         issuerCode: String,
         lastFour: String,
         performanceTargetAmount: Int,
-        benefits: [CardBenefit]
+        benefits: [CardBenefit],
+        performanceExclusions: [String],
+        benefitExclusions: [String]
     ) {
         self.id = id
         self.displayName = displayName
@@ -36,6 +40,8 @@ public struct ManagedCard: Codable, Equatable, Sendable {
         self.lastFour = lastFour
         self.performanceTargetAmount = performanceTargetAmount
         self.benefits = benefits
+        self.performanceExclusions = performanceExclusions
+        self.benefitExclusions = benefitExclusions
     }
 }
 
@@ -181,22 +187,45 @@ public struct TransactionUpdateRequest: Codable, Equatable, Sendable {
 public struct PerformanceProgress: Codable, Equatable, Sendable {
     public let currentAmount: Int
     public let targetAmount: Int
+    public let remainingAmount: Int
+    public let excludedAmount: Int
+    public let unconfirmedAmount: Int
+    public let unconfirmedCount: Int
 
-    public init(currentAmount: Int, targetAmount: Int) {
+    public init(
+        currentAmount: Int,
+        targetAmount: Int,
+        remainingAmount: Int,
+        excludedAmount: Int,
+        unconfirmedAmount: Int,
+        unconfirmedCount: Int
+    ) {
         self.currentAmount = currentAmount
         self.targetAmount = targetAmount
+        self.remainingAmount = remainingAmount
+        self.excludedAmount = excludedAmount
+        self.unconfirmedAmount = unconfirmedAmount
+        self.unconfirmedCount = unconfirmedCount
     }
 }
 
 public struct BenefitProgress: Codable, Equatable, Sendable {
     public let id: UUID
     public let label: String
+    public let calculationAmount: Int
     public let receivedAmount: Int
     public let maximumAmount: Int
 
-    public init(id: UUID, label: String, receivedAmount: Int, maximumAmount: Int) {
+    public init(
+        id: UUID,
+        label: String,
+        calculationAmount: Int,
+        receivedAmount: Int,
+        maximumAmount: Int
+    ) {
         self.id = id
         self.label = label
+        self.calculationAmount = calculationAmount
         self.receivedAmount = receivedAmount
         self.maximumAmount = maximumAmount
     }
@@ -204,17 +233,23 @@ public struct BenefitProgress: Codable, Equatable, Sendable {
 
 public struct CardDashboard: Codable, Equatable, Sendable {
     public let cardId: UUID
+    public let period: String
     public let performance: PerformanceProgress
     public let benefits: [BenefitProgress]
+    public let benefitUnconfirmedCount: Int
 
     public init(
         cardId: UUID,
+        period: String,
         performance: PerformanceProgress,
-        benefits: [BenefitProgress]
+        benefits: [BenefitProgress],
+        benefitUnconfirmedCount: Int
     ) {
         self.cardId = cardId
+        self.period = period
         self.performance = performance
         self.benefits = benefits
+        self.benefitUnconfirmedCount = benefitUnconfirmedCount
     }
 }
 
