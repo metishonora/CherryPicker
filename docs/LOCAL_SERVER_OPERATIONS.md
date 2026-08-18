@@ -61,6 +61,28 @@ curl --fail --silent http://127.0.0.1:8765/healthz
 응답은 `ok`다. 인증이 필요한 웹과 API는 Tailscale Serve가 전달하는
 `Tailscale-User-Login`이 정확히 허용된 값과 같아야 한다.
 
+## Mac 재시작 후 복구
+
+설치된 binary, 설정과 LaunchAgent plist를 검증만 하려면 다음 명령을
+실행한다. 서비스 등록이나 시작은 하지 않는다.
+
+```sh
+Scripts/LocalServer/recover-launch-agent.sh --check
+```
+
+설치 상태를 검증하고 필요한 경우에만 LaunchAgent를 등록·시작한 뒤
+localhost health 응답까지 기다리려면 다음 명령을 실행한다.
+
+```sh
+Scripts/LocalServer/recover-launch-agent.sh
+```
+
+이미 등록된 서버가 정상이라면 재시작하지 않는다. 서버가 등록되지 않았거나
+health 응답이 없을 때만 `launchctl bootstrap` 또는 `kickstart`를 수행한다.
+이 스크립트는 binary나 설정을 다시 설치하지 않고 SQLite, 로그와 Tailscale
+Serve를 변경하지 않는다. 설치 파일이 없거나 서로 일치하지 않으면 변경 없이
+실패하므로 위 설치 절차를 별도로 검토해야 한다.
+
 ## Tailscale Serve
 
 Serve 변경은 설치 스크립트와 분리한다. 사용자가 경로를 검토하고 승인한

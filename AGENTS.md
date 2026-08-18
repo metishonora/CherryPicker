@@ -26,6 +26,10 @@
 - Never terminate a process not recorded and verified by the shared manager.
 - Stop a session-owned prototype server on the next user turn by default. Preserve it only when the user explicitly requests continued operation.
 
+## Installed product server recovery
+
+- For requests to recover or start the installed CherryPicker product server after a Mac restart, use `cherrypicker_server_manager`.
+
 ## Verification
 
 - For isolated prototypes, run focused checks sufficient to show that the approved states load and interactions work at the target viewports.
