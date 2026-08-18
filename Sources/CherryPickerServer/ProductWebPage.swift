@@ -46,7 +46,7 @@ enum ProductWebPage {
               line-height: 1.5;
             }
             button, input, select, textarea { font: inherit; color: inherit; }
-            button { cursor: pointer; }
+            button { cursor: pointer; touch-action: manipulation; }
             [hidden] { display: none !important; }
             .cp-shell { width: min(100%, 760px); margin: 0 auto; min-height: 100vh; background: var(--cp-surface); }
             .cp-header {
@@ -76,13 +76,36 @@ enum ProductWebPage {
             .cp-heading h1 { margin: 0; font-size: clamp(26px, 6vw, 34px); line-height: 1.25; letter-spacing: -0.04em; }
             .cp-heading p { margin: 10px 0 0; color: var(--cp-subtle); }
             .cp-accent { color: var(--cp-accent); }
+            .cp-period-wrap { position: relative; margin-bottom: 18px; }
             .cp-period {
               display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center;
-              gap: 10px; margin-bottom: 18px; padding: 8px; border-radius: 16px; background: var(--cp-soft);
+              gap: 10px; padding: 8px; border-radius: 16px; background: var(--cp-soft);
             }
-            .cp-period strong { text-align: center; font-size: 18px; }
-            .cp-period button { width: 44px; height: 44px; border: 0; border-radius: 12px; background: var(--cp-surface); font-size: 25px; line-height: 1; }
+            .cp-period > button { min-height: 44px; border: 0; border-radius: 12px; background: var(--cp-surface); }
+            .cp-period > button:not(.cp-period-trigger) { width: 44px; font-size: 25px; line-height: 1; }
             .cp-period button:disabled { cursor: default; opacity: .34; }
+            .cp-period-trigger { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 0 14px; }
+            .cp-period-trigger strong { font-size: 18px; }
+            .cp-period-trigger span { color: var(--cp-muted); transition: transform .16s ease; }
+            .cp-period-trigger[aria-expanded="true"] span { transform: rotate(180deg); }
+            .cp-period-trigger:focus-visible, .cp-picker-head button:focus-visible, .cp-month-grid button:focus-visible {
+              outline: 3px solid color-mix(in srgb, var(--cp-accent) 34%, transparent); outline-offset: 2px;
+            }
+            .cp-month-picker {
+              position: absolute; top: calc(100% + 8px); left: 50%; z-index: 30;
+              width: min(360px, calc(100vw - 36px)); translate: -50% 0; padding: 18px;
+              border: 1px solid var(--cp-line); border-radius: 20px; background: var(--cp-surface);
+              box-shadow: 0 18px 50px color-mix(in srgb, #000 22%, transparent);
+            }
+            .cp-picker-head { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; gap: 8px; }
+            .cp-picker-head strong { text-align: center; font-size: 19px; }
+            .cp-picker-head button { width: 40px; height: 40px; border: 0; border-radius: 11px; background: var(--cp-soft); font-size: 22px; line-height: 1; }
+            .cp-picker-head button:disabled { cursor: default; opacity: .34; }
+            .cp-month-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 16px; }
+            .cp-month-grid button { min-height: 45px; border: 0; border-radius: 12px; background: transparent; font-weight: 650; }
+            .cp-month-grid button:hover:not(:disabled) { background: var(--cp-soft); }
+            .cp-month-grid button[aria-pressed="true"] { color: var(--cp-accent); background: var(--cp-accent-soft); font-weight: 800; }
+            .cp-month-grid button:disabled { cursor: default; color: var(--cp-muted); opacity: .38; }
             .cp-list { border-top: 1px solid var(--cp-line); }
             .cp-row {
               width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto;
@@ -195,6 +218,7 @@ enum ProductWebPage {
               .cp-panel-head { align-items: center; }
               #view-dashboard .cp-metric-label { display: grid; gap: 3px; }
               #view-dashboard .cp-metric-label strong { justify-self: start; }
+              .cp-month-picker { padding: 16px; }
               .cp-actions { grid-template-columns: 1fr 1.25fr; }
             }
             @media (prefers-reduced-motion: reduce) { .cp-progress span { transition: none; } }
@@ -223,10 +247,22 @@ enum ProductWebPage {
 
               <section id="view-dashboard" hidden>
                 <div class="cp-heading"><h1 id="dashboard-title">카드 대시보드</h1><p id="dashboard-meta"></p></div>
-                <div class="cp-period" data-period-control>
-                  <button type="button" data-month-step="-1" aria-label="이전 달">‹</button>
-                  <strong data-period-label></strong>
-                  <button type="button" data-month-step="1" aria-label="다음 달">›</button>
+                <div class="cp-period-wrap" data-period-control>
+                  <div class="cp-period">
+                    <button type="button" data-month-step="-1" aria-label="이전 달">‹</button>
+                    <button class="cp-period-trigger" type="button" data-period-picker-trigger aria-haspopup="dialog" aria-expanded="false">
+                      <strong data-period-label></strong><span aria-hidden="true">⌄</span>
+                    </button>
+                    <button type="button" data-month-step="1" aria-label="다음 달">›</button>
+                  </div>
+                  <section class="cp-month-picker" data-month-picker role="dialog" aria-label="연도와 월 선택" hidden>
+                    <div class="cp-picker-head">
+                      <button type="button" data-year-step="-1" aria-label="이전 연도">‹</button>
+                      <strong data-picker-year></strong>
+                      <button type="button" data-year-step="1" aria-label="다음 연도">›</button>
+                    </div>
+                    <div class="cp-month-grid" data-month-grid aria-label="월 선택"></div>
+                  </section>
                 </div>
                 <div class="cp-panel">
                   <div class="cp-panel-head"><h2>실적</h2></div>
@@ -260,10 +296,22 @@ enum ProductWebPage {
 
               <section id="view-transactions" hidden>
                 <div class="cp-heading"><h1 id="transactions-title">카드 거래</h1><p id="transactions-meta"></p></div>
-                <div class="cp-period" data-period-control>
-                  <button type="button" data-month-step="-1" aria-label="이전 달">‹</button>
-                  <strong data-period-label></strong>
-                  <button type="button" data-month-step="1" aria-label="다음 달">›</button>
+                <div class="cp-period-wrap" data-period-control>
+                  <div class="cp-period">
+                    <button type="button" data-month-step="-1" aria-label="이전 달">‹</button>
+                    <button class="cp-period-trigger" type="button" data-period-picker-trigger aria-haspopup="dialog" aria-expanded="false">
+                      <strong data-period-label></strong><span aria-hidden="true">⌄</span>
+                    </button>
+                    <button type="button" data-month-step="1" aria-label="다음 달">›</button>
+                  </div>
+                  <section class="cp-month-picker" data-month-picker role="dialog" aria-label="연도와 월 선택" hidden>
+                    <div class="cp-picker-head">
+                      <button type="button" data-year-step="-1" aria-label="이전 연도">‹</button>
+                      <strong data-picker-year></strong>
+                      <button type="button" data-year-step="1" aria-label="다음 연도">›</button>
+                    </div>
+                    <div class="cp-month-grid" data-month-grid aria-label="월 선택"></div>
+                  </section>
                 </div>
                 <div class="cp-filter" aria-label="거래 필터">
                   <button type="button" data-filter="all" aria-pressed="true">전체</button>
@@ -346,6 +394,7 @@ enum ProductWebPage {
               const currentMonth = monthKeyForDate(new Date());
               const earliestMonth = '2026-08';
               const state = { cards: [], selectedCardId: null, view: 'inbox', filter: 'all', month: currentMonth, activeTransaction: null, dashboard: null, returnView: 'inbox' };
+              let visiblePickerYear = Number(currentMonth.slice(0, 4));
               const card = () => state.cards.find(value => value.id === state.selectedCardId);
 
               function shiftedMonth(value, offset) {
@@ -369,6 +418,58 @@ enum ProductWebPage {
                 $$('[data-period-label]').forEach(value => { value.textContent = monthLabel(state.month); });
                 $$('[data-month-step="-1"]').forEach(value => { value.disabled = state.month <= earliestMonth; });
                 $$('[data-month-step="1"]').forEach(value => { value.disabled = state.month >= currentMonth; });
+              }
+
+              function closeMonthPickers({ restoreFocus = false } = {}) {
+                $$('[data-month-picker]').forEach(picker => {
+                  if (picker.hidden) return;
+                  picker.hidden = true;
+                  const trigger = picker.closest('[data-period-control]').querySelector('[data-period-picker-trigger]');
+                  trigger.setAttribute('aria-expanded', 'false');
+                  if (restoreFocus) trigger.focus();
+                });
+              }
+
+              function renderMonthPickers() {
+                const earliestYear = Number(earliestMonth.slice(0, 4));
+                const currentYear = Number(currentMonth.slice(0, 4));
+                $$('[data-month-picker]').forEach(picker => {
+                  picker.querySelector('[data-picker-year]').textContent = `${visiblePickerYear}년`;
+                  picker.querySelector('[data-year-step="-1"]').disabled = visiblePickerYear <= earliestYear;
+                  picker.querySelector('[data-year-step="1"]').disabled = visiblePickerYear >= currentYear;
+                  const grid = picker.querySelector('[data-month-grid]');
+                  grid.replaceChildren(...Array.from({ length: 12 }, (_, index) => {
+                    const month = index + 1;
+                    const value = `${visiblePickerYear}-${String(month).padStart(2, '0')}`;
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.textContent = `${month}월`;
+                    button.disabled = value < earliestMonth || value > currentMonth;
+                    button.setAttribute('aria-pressed', String(value === state.month));
+                    button.addEventListener('click', () => selectMonth(value).catch(showError));
+                    return button;
+                  }));
+                });
+              }
+
+              function openMonthPicker(control) {
+                const picker = control.querySelector('[data-month-picker]');
+                const trigger = control.querySelector('[data-period-picker-trigger]');
+                const shouldOpen = picker.hidden;
+                closeMonthPickers();
+                if (!shouldOpen) return;
+                visiblePickerYear = Number(state.month.slice(0, 4));
+                renderMonthPickers();
+                picker.hidden = false;
+                trigger.setAttribute('aria-expanded', 'true');
+                picker.querySelector('[aria-pressed="true"]:not(:disabled)')?.focus();
+              }
+
+              async function selectMonth(value) {
+                state.month = clampedMonth(value);
+                closeMonthPickers({ restoreFocus: true });
+                if (state.view === 'dashboard') await loadDashboard();
+                if (state.view === 'transactions') await loadTransactions();
               }
 
               function renderPolicyList(type, items) {
@@ -413,6 +514,7 @@ enum ProductWebPage {
 
               async function showView(view) {
                 clearError();
+                closeMonthPickers();
                 if (view === 'inbox') {
                   state.selectedCardId = null;
                   $('#card-selector').value = '';
@@ -622,9 +724,25 @@ enum ProductWebPage {
               $$('[data-month-step]').forEach(button => button.addEventListener('click', async () => {
                 const next = shiftedMonth(state.month, Number(button.dataset.monthStep));
                 state.month = clampedMonth(next);
+                closeMonthPickers();
                 if (state.view === 'dashboard') await loadDashboard();
                 if (state.view === 'transactions') await loadTransactions();
               }));
+              $$('[data-period-picker-trigger]').forEach(trigger => trigger.addEventListener('click', () => {
+                openMonthPicker(trigger.closest('[data-period-control]'));
+              }));
+              $$('[data-year-step]').forEach(button => button.addEventListener('click', () => {
+                const earliestYear = Number(earliestMonth.slice(0, 4));
+                const currentYear = Number(currentMonth.slice(0, 4));
+                visiblePickerYear = Math.min(currentYear, Math.max(earliestYear, visiblePickerYear + Number(button.dataset.yearStep)));
+                renderMonthPickers();
+              }));
+              document.addEventListener('click', event => {
+                if (!event.target.closest('[data-period-control]')) closeMonthPickers();
+              });
+              document.addEventListener('keydown', event => {
+                if (event.key === 'Escape') closeMonthPickers({ restoreFocus: true });
+              });
               $$('.cp-filter button').forEach(button => button.addEventListener('click', async () => {
                 state.filter = button.dataset.filter; $$('.cp-filter button').forEach(value => value.setAttribute('aria-pressed', String(value === button))); await loadTransactions();
               }));
