@@ -589,6 +589,7 @@ final class Issue4BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
                 XCTAssertFalse(body.contains("혜택 미확인"))
                 XCTAssertTrue(body.contains("name.className = 'cp-benefit-name'"))
                 XCTAssertTrue(body.contains("wrap.append(label, progress, terms)"))
+                XCTAssertTrue(body.contains("조건: 건당 ${won(benefit.minimumTransactionAmount)} 이상"))
                 XCTAssertFalse(body.contains("row.append(checkbox, label, terms, wrap)"))
                 XCTAssertTrue(body.contains("row.append(checkbox, label, wrap)"))
                 XCTAssertFalse(body.contains("originalMessage"))

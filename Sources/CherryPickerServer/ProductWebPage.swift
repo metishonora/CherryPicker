@@ -531,7 +531,7 @@ enum ProductWebPage {
               }
 
               function benefitTerms(benefit) {
-                const values = [`건당 ${won(benefit.minimumTransactionAmount)} 이상`];
+                const values = [`조건: 건당 ${won(benefit.minimumTransactionAmount)} 이상`];
                 benefit.exclusionNotes.forEach(note => values.push(`제외: ${note}`));
                 return values.join('\n');
               }
