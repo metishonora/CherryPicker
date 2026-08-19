@@ -236,11 +236,13 @@
     .benefit-row-main { min-width: 0; }
     .benefit-row strong { font-size: 16px; }
     .benefit-row p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+    .benefit-row p + p { margin-top: 2px; }
     .benefit-amount { align-self: center; font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .individual-benefit + .individual-benefit { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
     .metric-label { display: flex; justify-content: space-between; gap: 16px; }
     .metric-label strong:last-child { font-variant-numeric: tabular-nums; }
     .individual-benefit p { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+    .individual-benefit p + p { margin-top: 4px; }
 
     .detail-back {
       padding: 0;
@@ -631,14 +633,14 @@
       ];
       const performanceThresholds = [300_000, 600_000, 1_000_000];
       const sharedBenefits = [
-        { name: '간편결제 10% 청구할인', terms: '조건: 건당 1만원 이상', amount: 7_850 },
-        { name: '영상 스트리밍 50% 청구할인', terms: '조건: 월 정기결제', amount: 2_450 },
-        { name: '디지털 멤버십 50% 청구할인', terms: '조건: 월 정기결제', amount: 2_350 }
+        { name: '간편결제 10% 청구할인', targets: ['네이버페이', '카카오페이', '토스페이', 'SSG페이', '11pay', '스마일페이'], terms: '조건: 건당 1만원 이상', amount: 7_850 },
+        { name: '영상 스트리밍 50% 청구할인', targets: ['유튜브', '디즈니플러스', 'Wavve', '넷플릭스', '티빙'], terms: '조건: 월 정기결제', amount: 2_450 },
+        { name: '디지털 멤버십 50% 청구할인', targets: ['네이버플러스멤버십', '컬리멤버스', '쿠팡와우멤버십'], terms: '조건: 월 정기결제', amount: 2_350 }
       ];
       const legacyBenefits = [
-        { name: '간편결제 20% 할인캐시백', received: 4_800, maximum: 6_000, terms: '건당 1만원 이상' },
-        { name: '온라인 쇼핑 20% 할인캐시백', received: 6_000, maximum: 6_000, terms: '건당 1만원 이상' },
-        { name: '커피 20% 할인캐시백', received: 3_200, maximum: 6_000, terms: '건당 5천원 이상' }
+        { name: '간편결제 20% 할인캐시백', targets: ['네이버페이', '카카오페이', '페이코'], received: 4_800, maximum: 6_000, terms: '건당 1만원 이상' },
+        { name: '온라인 쇼핑 20% 할인캐시백', targets: ['쿠팡', '무신사', '지그재그', 'W컨셉', '에이블리'], received: 6_000, maximum: 6_000, terms: '건당 1만원 이상' },
+        { name: '커피 20% 할인캐시백', targets: ['스타벅스', '투썸플레이스', '커피빈', '메가커피', '빽다방', '컴포즈커피'], received: 3_200, maximum: 6_000, terms: '건당 5천원 이상' }
       ];
       const scenarios = {
         standard: { card: 'mg-plus-s', current: 487_320, excluded: 32_400, unconfirmed: '2건 · 24,700원', previousTransaction: 575_000, offset: 25_000, used: 12_650 },
@@ -732,22 +734,28 @@
           const row = document.createElement('div'); row.className = 'benefit-row';
           const main = document.createElement('div'); main.className = 'benefit-row-main';
           const name = document.createElement('strong'); name.textContent = benefit.name;
+          const targets = document.createElement('p'); targets.textContent = `대상: ${benefit.targets.join(', ')}`;
           const terms = document.createElement('p'); terms.textContent = benefit.terms;
           const amount = document.createElement('span'); amount.className = 'benefit-amount'; amount.textContent = won(Math.min(maximum, amounts[index]));
-          main.append(name, terms); row.append(main, amount); return row;
+          main.append(name);
+          if (benefit.targets.length > 0) main.append(targets);
+          main.append(terms); row.append(main, amount); return row;
         });
         $('#shared-benefit-list').replaceChildren(...rows);
       }
 
       function renderLegacyBenefits() {
-        const fragments = legacyBenefits.map(({ name, received, maximum, terms }) => {
+        const fragments = legacyBenefits.map(({ name, targets, received, maximum, terms }) => {
           const wrap = document.createElement('div'); wrap.className = 'individual-benefit';
           const label = document.createElement('div'); label.className = 'metric-label';
           const title = document.createElement('strong'); title.textContent = name;
           const amount = document.createElement('strong'); amount.textContent = `${won(received)} / ${won(maximum)}`;
           const progress = document.createElement('div'); progress.className = 'progress'; progress.setAttribute('role', 'progressbar'); progress.setAttribute('aria-label', name); progress.append(document.createElement('span')); setProgress(progress, received, maximum);
+          const targetsDescription = document.createElement('p'); targetsDescription.textContent = `대상: ${targets.join(', ')}`;
           const description = document.createElement('p'); description.textContent = `조건: ${terms} · 전월 실적 30만원 이상`;
-          label.append(title, amount); wrap.append(label, progress, description); return wrap;
+          label.append(title, amount); wrap.append(label, progress);
+          if (targets.length > 0) wrap.append(targetsDescription);
+          wrap.append(description); return wrap;
         });
         $('#legacy-benefit-list').replaceChildren(...fragments);
       }

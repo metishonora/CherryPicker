@@ -554,6 +554,11 @@ final class Issue12AggregationBlackBoxAcceptanceTests: XCTestCase, @unchecked Se
                 XCTAssertTrue(html.contains("혜택별 받은 금액"))
                 XCTAssertTrue(html.contains("cp-benefit-summary"))
                 XCTAssertTrue(html.contains("data-card-theme"))
+                XCTAssertTrue(
+                    html.contains(
+                        "if (benefit.eligibleMerchants.length > 0) values.push(`대상: ${benefit.eligibleMerchants.join(', ')}`);"
+                    )
+                )
                 XCTAssertFalse(html.contains("integrated-remaining"))
                 XCTAssertFalse(html.contains("integrated-received"))
             }

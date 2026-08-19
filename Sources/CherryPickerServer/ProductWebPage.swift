@@ -857,6 +857,7 @@ enum ProductWebPage {
 
               function benefitTerms(benefit) {
                 const values = [];
+                if (benefit.eligibleMerchants.length > 0) values.push(`대상: ${benefit.eligibleMerchants.join(', ')}`);
                 if (benefit.minimumTransactionAmount > 0) values.push(`조건: 건당 ${won(benefit.minimumTransactionAmount)} 이상`);
                 if (benefit.recurringPaymentOnly) values.push('조건: 월 정기결제');
                 benefit.exclusionNotes.forEach(note => values.push(`제외: ${note}`));
