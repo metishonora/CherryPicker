@@ -864,6 +864,12 @@ enum ProductWebPage {
                 return values.join('\n');
               }
 
+              function integratedReviewBenefitProgress(dashboard, previewCalculations) {
+                const maximum = dashboard.benefitLimit.maximumAmount || 0;
+                const calculation = Array.from(previewCalculations.values()).reduce((sum, amount) => sum + amount, 0);
+                return { received: Math.max(0, Math.min(maximum, calculation)), maximum };
+              }
+
               function updateReviewPreview() {
                 const transaction = state.activeTransaction, dashboard = state.dashboard, selectedCard = card();
                 if (!transaction || !dashboard || !selectedCard) return;
@@ -881,18 +887,29 @@ enum ProductWebPage {
                   true
                 );
 
-                selectedCard.benefits.forEach(benefit => {
+                const previewCalculations = new Map(selectedCard.benefits.map(benefit => {
                   const checkbox = document.getElementById(`benefit-${benefit.id}`);
-                  const progressWrap = document.getElementById(`benefit-progress-${benefit.id}`);
                   let received = dashboard.benefits.find(value => value.id === benefit.id)?.calculationAmount || 0;
                   if (transaction.reviewStatus === 'reviewed' && !transaction.aggregationExcluded && transaction.benefitIds.includes(benefit.id)) received -= benefitContribution(transaction, benefit);
                   if (!excluded && checkbox.checked) received += benefitContribution(transaction, benefit);
-                  received = Math.max(0, benefit.maximumAmount == null ? received : Math.min(benefit.maximumAmount, received));
+                  return [benefit.id, received];
+                }));
+                const integratedProgress = dashboard.benefitLimit.type === 'integrated'
+                  ? integratedReviewBenefitProgress(dashboard, previewCalculations)
+                  : null;
+
+                selectedCard.benefits.forEach(benefit => {
+                  const checkbox = document.getElementById(`benefit-${benefit.id}`);
+                  const progressWrap = document.getElementById(`benefit-progress-${benefit.id}`);
+                  const calculation = previewCalculations.get(benefit.id) || 0;
+                  const received = integratedProgress?.received
+                    ?? Math.max(0, benefit.maximumAmount == null ? calculation : Math.min(benefit.maximumAmount, calculation));
+                  const maximum = integratedProgress?.maximum ?? benefit.maximumAmount;
                   progressWrap.hidden = !checkbox.checked || excluded;
-                  progressWrap.querySelector('strong').textContent = benefit.maximumAmount == null ? won(received) : `${won(received)} / ${won(benefit.maximumAmount)}`;
+                  progressWrap.querySelector('strong').textContent = maximum == null ? won(received) : `${won(received)} / ${won(maximum)}`;
                   const progress = progressWrap.querySelector('.cp-progress');
-                  progress.hidden = benefit.maximumAmount == null;
-                  if (benefit.maximumAmount != null) setProgress(progress, received, benefit.maximumAmount);
+                  progress.hidden = maximum == null;
+                  if (maximum != null) setProgress(progress, received, maximum);
                 });
               }
 
