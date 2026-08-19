@@ -546,7 +546,16 @@ final class Issue12AggregationBlackBoxAcceptanceTests: XCTestCase, @unchecked Se
                 XCTAssertTrue(html.contains("performance-progress"))
                 XCTAssertTrue(html.contains("detail-performance-progress"))
                 XCTAssertTrue(html.contains("다음 실적 구간까지"))
-                XCTAssertTrue(html.contains("통합혜택한도"))
+                XCTAssertTrue(html.contains("id=\"benefit-overview-received\""))
+                XCTAssertTrue(html.contains("id=\"benefit-overview-maximum\""))
+                XCTAssertTrue(html.contains("id=\"benefit-overview-progress\""))
+                XCTAssertTrue(html.contains("받은 통합혜택"))
+                XCTAssertTrue(html.contains("받은 혜택"))
+                XCTAssertTrue(html.contains("혜택별 받은 금액"))
+                XCTAssertTrue(html.contains("cp-benefit-summary"))
+                XCTAssertTrue(html.contains("data-card-theme"))
+                XCTAssertFalse(html.contains("integrated-remaining"))
+                XCTAssertFalse(html.contains("integrated-received"))
             }
         }
     }

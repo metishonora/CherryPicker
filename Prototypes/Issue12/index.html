@@ -86,6 +86,10 @@
       background: var(--surface);
       box-shadow: var(--shadow);
     }
+    .product-shell[data-card-theme="legacy"] {
+      --accent: light-dark(#0b8f82, #5dd6c5);
+      --accent-soft: light-dark(#e8f7f4, #173631);
+    }
 
     .product-header {
       display: flex;
@@ -106,6 +110,7 @@
       border: 0;
       border-radius: 12px;
       background: var(--soft);
+      box-shadow: inset 3px 0 0 var(--accent);
     }
     .product-nav {
       display: flex;
@@ -212,9 +217,15 @@
       font-size: 14px;
     }
 
-    .benefit-summary { margin-top: 26px; }
+    .benefit-summary {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
+    }
     .benefit-summary h4 { margin: 0; font-size: 16px; }
     .benefit-list { margin-top: 14px; border-top: 1px solid var(--line); }
+    .legacy-benefit-list { margin-top: 14px; border-top: 1px solid var(--line); }
+    .legacy-benefit-list .individual-benefit:first-child { padding-top: 17px; }
     .benefit-row {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
@@ -485,9 +496,8 @@
             <section class="panel" aria-labelledby="benefit-title">
               <div class="panel-head"><h3 id="benefit-title">혜택</h3><span>2026년 8월</span></div>
               <div id="integrated-benefit">
-                <p class="hero-label">남은 통합혜택한도</p>
-                <div class="hero-value"><strong id="remaining-limit">17,350원</strong><span id="total-limit-label">/ 30,000원</span></div>
-                <p class="supporting">이번 달 <strong id="used-benefit">12,650원</strong> 사용했어요</p>
+                <p class="hero-label">받은 통합혜택</p>
+                <div class="hero-value"><strong id="received-limit">12,650원</strong><span id="total-limit-label">/ 30,000원</span></div>
                 <div id="integrated-progress" class="progress" role="progressbar" aria-label="통합혜택한도 사용률" aria-valuemin="0" aria-valuemax="30000" aria-valuenow="12650"><span></span></div>
 
                 <p id="no-limit-message" class="no-limit-message" hidden>직전 월 최종 실적이 30만원 미만이라 이번 달에는 제공되는 혜택한도가 없습니다.</p>
@@ -515,7 +525,15 @@
                   </ul>
                 </details>
               </div>
-              <div id="individual-benefits" hidden></div>
+              <div id="individual-benefits" hidden>
+                <p class="hero-label">받은 혜택</p>
+                <div class="hero-value"><strong id="legacy-benefit-received">14,000원</strong><span id="legacy-benefit-maximum">/ 18,000원</span></div>
+                <div id="legacy-benefit-progress" class="progress" role="progressbar" aria-label="받은 혜택 비율" aria-valuemin="0" aria-valuemax="18000" aria-valuenow="14000"><span></span></div>
+                <div class="benefit-summary">
+                  <h4>혜택별 받은 금액</h4>
+                  <div id="legacy-benefit-list" class="legacy-benefit-list"></div>
+                </div>
+              </div>
             </section>
           </section>
 
@@ -617,6 +635,11 @@
         { name: '영상 스트리밍 50% 청구할인', terms: '조건: 월 정기결제', amount: 2_450 },
         { name: '디지털 멤버십 50% 청구할인', terms: '조건: 월 정기결제', amount: 2_350 }
       ];
+      const legacyBenefits = [
+        { name: '간편결제 20% 할인캐시백', received: 4_800, maximum: 6_000, terms: '건당 1만원 이상' },
+        { name: '온라인 쇼핑 20% 할인캐시백', received: 6_000, maximum: 6_000, terms: '건당 1만원 이상' },
+        { name: '커피 20% 할인캐시백', received: 3_200, maximum: 6_000, terms: '건당 5천원 이상' }
+      ];
       const scenarios = {
         standard: { card: 'mg-plus-s', current: 487_320, excluded: 32_400, unconfirmed: '2건 · 24,700원', previousTransaction: 575_000, offset: 25_000, used: 12_650 },
         'no-limit': { card: 'mg-plus-s', current: 128_400, excluded: 18_000, unconfirmed: '1건 · 9,900원', previousTransaction: 284_000, offset: 0, used: 0 },
@@ -717,12 +740,7 @@
       }
 
       function renderLegacyBenefits() {
-        const definitions = [
-          ['간편결제 20% 할인캐시백', 4_800, 6_000, '건당 1만원 이상'],
-          ['온라인 쇼핑 20% 할인캐시백', 6_000, 6_000, '건당 1만원 이상'],
-          ['커피 20% 할인캐시백', 3_200, 6_000, '건당 5천원 이상']
-        ];
-        const fragments = definitions.map(([name, received, maximum, terms]) => {
+        const fragments = legacyBenefits.map(({ name, received, maximum, terms }) => {
           const wrap = document.createElement('div'); wrap.className = 'individual-benefit';
           const label = document.createElement('div'); label.className = 'metric-label';
           const title = document.createElement('strong'); title.textContent = name;
@@ -731,7 +749,7 @@
           const description = document.createElement('p'); description.textContent = `조건: ${terms} · 전월 실적 30만원 이상`;
           label.append(title, amount); wrap.append(label, progress, description); return wrap;
         });
-        $('#individual-benefits').replaceChildren(...fragments);
+        $('#legacy-benefit-list').replaceChildren(...fragments);
       }
 
       function renderDashboard() {
@@ -740,6 +758,7 @@
         const previousFinal = scenario.previousTransaction + scenario.offset;
         const tier = tierFor(previousFinal);
         $('#card-selector').value = scenario.card;
+        $('.product-shell').dataset.cardTheme = isLegacy ? 'legacy' : 'mg-plus-s';
         $('#dashboard-title').textContent = isLegacy ? 'MG 더나은 체크카드' : 'MG+S 하나카드';
         $('#dashboard-meta').textContent = isLegacy ? 'MG · 2468' : 'HANA · 1357';
         renderPerformanceGoal(scenario.current, isLegacy);
@@ -750,15 +769,19 @@
           $('#policy-list').innerHTML = '<li>해외가맹점 이용금액</li><li>소액신용결제 및 후불교통 이용금액</li>';
           $('#integrated-benefit').hidden = true;
           $('#individual-benefits').hidden = false;
+          const legacyReceived = legacyBenefits.reduce((sum, benefit) => sum + benefit.received, 0);
+          const legacyMaximum = legacyBenefits.reduce((sum, benefit) => sum + benefit.maximum, 0);
+          $('#legacy-benefit-received').textContent = won(legacyReceived);
+          $('#legacy-benefit-maximum').textContent = `/ ${won(legacyMaximum)}`;
+          setProgress($('#legacy-benefit-progress'), legacyReceived, legacyMaximum);
           renderLegacyBenefits();
         } else {
           $('#policy-list').innerHTML = '<li>국세·지방세와 공과금</li><li>아파트관리비와 4대 보험료</li><li>학교 납입금과 대학·대학원 등록금</li><li>상품권·기프트카드 구매 및 선불수단 충전</li><li>부동산 임대료</li>';
           $('#integrated-benefit').hidden = false;
           $('#individual-benefits').hidden = true;
           const used = Math.min(scenario.used, tier.limit);
-          $('#remaining-limit').textContent = won(Math.max(0, tier.limit - used));
+          $('#received-limit').textContent = won(used);
           $('#total-limit-label').textContent = `/ ${won(tier.limit)}`;
-          $('#used-benefit').textContent = won(used);
           $('#no-limit-message').hidden = tier.limit !== 0;
           $('#integrated-progress').hidden = tier.limit === 0;
           setProgress($('#integrated-progress'), used, tier.limit);

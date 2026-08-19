@@ -49,6 +49,10 @@ enum ProductWebPage {
             button { cursor: pointer; touch-action: manipulation; }
             [hidden] { display: none !important; }
             .cp-shell { width: min(100%, 760px); margin: 0 auto; min-height: 100vh; background: var(--cp-surface); }
+            .cp-shell[data-card-theme="per-benefit"] {
+              --cp-accent: light-dark(#0b8f82, #5dd6c5);
+              --cp-accent-soft: light-dark(#e8f7f4, #173631);
+            }
             .cp-header {
               display: flex; gap: 16px; align-items: center; justify-content: space-between;
               padding: 20px 24px 14px; border-bottom: 1px solid var(--cp-line);
@@ -61,6 +65,7 @@ enum ProductWebPage {
             .cp-card-select {
               min-width: 220px; max-width: 58%; padding: 10px 34px 10px 12px;
               border: 0; border-radius: 12px; background: var(--cp-soft); font-size: 16px;
+              box-shadow: inset 3px 0 0 var(--cp-accent);
             }
             .cp-nav {
               display: flex; gap: 4px; overflow-x: auto; padding: 10px 12px;
@@ -128,6 +133,7 @@ enum ProductWebPage {
             .cp-panel h2, .cp-section h2 { margin: 0 0 18px; font-size: 18px; }
             .cp-panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
             .cp-panel-head h2 { margin: 0; }
+            .cp-hero-label { margin: 0 0 6px; color: var(--cp-subtle); font-size: 14px; }
             .cp-hero-value { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; }
             .cp-hero-value strong { font-size: clamp(30px, 8vw, 42px); line-height: 1.15; letter-spacing: -0.045em; font-variant-numeric: tabular-nums; }
             .cp-hero-value span { color: var(--cp-muted); font-weight: 650; }
@@ -162,6 +168,10 @@ enum ProductWebPage {
             .cp-metric-label strong { color: var(--cp-text); font-variant-numeric: tabular-nums; }
             .cp-progress { height: 12px; margin-top: 12px; overflow: hidden; border-radius: 999px; background: var(--cp-track); }
             .cp-progress span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--cp-accent); transition: width .18s ease; }
+            .cp-benefit-summary { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--cp-line); }
+            .cp-benefit-summary h3 { margin: 0; font-size: 16px; }
+            .cp-benefit-list { margin-top: 14px; border-top: 1px solid var(--cp-line); }
+            .cp-benefit-list .cp-benefit:first-child { padding-top: 17px; }
             .cp-benefit-progress + .cp-benefit-progress { margin-top: 20px; }
             .cp-benefit + .cp-benefit { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--cp-line); }
             .cp-benefit-name { color: var(--cp-text); font-size: 18px; font-weight: 750; line-height: 1.35; }
@@ -321,12 +331,15 @@ enum ProductWebPage {
                 </div>
                 <div class="cp-panel">
                   <div class="cp-panel-head"><h2 id="benefit-panel-title">혜택</h2></div>
-                  <div id="integrated-benefit-summary" hidden>
-                    <div class="cp-hero-value"><strong id="integrated-remaining">0원</strong><span id="integrated-maximum">/ 0원</span></div>
-                    <p class="cp-remaining">이번 달 <strong id="integrated-received">0원</strong> 사용했어요</p>
-                    <div class="cp-progress" role="progressbar" id="integrated-benefit-progress" aria-label="통합혜택한도 사용량"><span></span></div>
+                  <div id="benefit-overview">
+                    <p class="cp-hero-label" id="benefit-overview-label">받은 혜택</p>
+                    <div class="cp-hero-value"><strong id="benefit-overview-received">0원</strong><span id="benefit-overview-maximum">/ 0원</span></div>
+                    <div class="cp-progress" role="progressbar" id="benefit-overview-progress" aria-label="받은 혜택 비율"><span></span></div>
                   </div>
-                  <div id="dashboard-benefits"></div>
+                  <div class="cp-benefit-summary">
+                    <h3>혜택별 받은 금액</h3>
+                    <div id="dashboard-benefits" class="cp-benefit-list"></div>
+                  </div>
                   <details class="cp-policy" id="benefit-exclusion-policy">
                     <summary>
                       <span>혜택 제외 항목</span>
@@ -595,6 +608,13 @@ enum ProductWebPage {
                 });
               }
 
+              function applyCardTheme() {
+                const selected = card();
+                $('.cp-shell').dataset.cardTheme = selected?.benefitLimitPolicy?.type === 'perBenefit'
+                  ? 'per-benefit'
+                  : 'integrated';
+              }
+
               async function showView(view) {
                 clearError();
                 closeMonthPickers();
@@ -603,6 +623,7 @@ enum ProductWebPage {
                   $('#card-selector').value = '';
                   setCardNavigationVisible(false);
                 }
+                applyCardTheme();
                 state.view = view;
                 $$('[id^="view-"]').forEach(section => { section.hidden = section.id !== `view-${view}`; });
                 setCurrentTab(view === 'detail' ? state.returnView : view);
@@ -722,15 +743,16 @@ enum ProductWebPage {
                 $('#excluded-value').textContent = won(performance.excludedAmount);
                 $('#unconfirmed-value').textContent = `${performance.unconfirmedCount}건 · ${won(performance.unconfirmedAmount)}`;
                 const integrated = data.dashboard.benefitLimit.type === 'integrated';
-                $('#benefit-panel-title').textContent = integrated ? '남은 통합혜택한도' : '혜택';
-                $('#integrated-benefit-summary').hidden = !integrated;
-                if (integrated) {
-                  const limit = data.dashboard.benefitLimit;
-                  $('#integrated-remaining').textContent = won(limit.remainingAmount);
-                  $('#integrated-maximum').textContent = `/ ${won(limit.maximumAmount)}`;
-                  $('#integrated-received').textContent = won(limit.receivedAmount);
-                  setProgress($('#integrated-benefit-progress'), limit.receivedAmount, limit.maximumAmount);
-                }
+                const overviewReceived = integrated
+                  ? data.dashboard.benefitLimit.receivedAmount || 0
+                  : data.dashboard.benefits.reduce((sum, value) => sum + value.receivedAmount, 0);
+                const overviewMaximum = integrated
+                  ? data.dashboard.benefitLimit.maximumAmount || 0
+                  : data.dashboard.benefits.reduce((sum, value) => sum + (value.maximumAmount || 0), 0);
+                $('#benefit-overview-label').textContent = integrated ? '받은 통합혜택' : '받은 혜택';
+                $('#benefit-overview-received').textContent = won(overviewReceived);
+                $('#benefit-overview-maximum').textContent = `/ ${won(overviewMaximum)}`;
+                setProgress($('#benefit-overview-progress'), overviewReceived, overviewMaximum);
                 const benefits = $('#dashboard-benefits'); benefits.replaceChildren();
                 data.dashboard.benefits.forEach(value => {
                   const wrap = document.createElement('div'); wrap.className = 'cp-benefit';
