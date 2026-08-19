@@ -5,9 +5,10 @@ public struct CardBenefit: Codable, Equatable, Sendable {
     public let label: String
     public let eligibleMerchants: [String]
     public let minimumTransactionAmount: Int
-    public let requiredPreviousMonthPerformanceAmount: Int
+    public let requiredPreviousMonthPerformanceAmount: Int?
     public let rateBasisPoints: Int
-    public let maximumAmount: Int
+    public let maximumAmount: Int?
+    public let recurringPaymentOnly: Bool
     public let exclusionNotes: [String]
 
     public init(
@@ -15,9 +16,10 @@ public struct CardBenefit: Codable, Equatable, Sendable {
         label: String,
         eligibleMerchants: [String],
         minimumTransactionAmount: Int,
-        requiredPreviousMonthPerformanceAmount: Int,
+        requiredPreviousMonthPerformanceAmount: Int?,
         rateBasisPoints: Int,
-        maximumAmount: Int,
+        maximumAmount: Int?,
+        recurringPaymentOnly: Bool,
         exclusionNotes: [String]
     ) {
         self.id = id
@@ -27,8 +29,24 @@ public struct CardBenefit: Codable, Equatable, Sendable {
         self.requiredPreviousMonthPerformanceAmount = requiredPreviousMonthPerformanceAmount
         self.rateBasisPoints = rateBasisPoints
         self.maximumAmount = maximumAmount
+        self.recurringPaymentOnly = recurringPaymentOnly
         self.exclusionNotes = exclusionNotes
     }
+}
+
+public enum BenefitLimitPolicyKind: String, Codable, Equatable, Sendable {
+    case perBenefit
+    case integrated
+}
+
+public struct BenefitLimitTier: Codable, Equatable, Sendable {
+    public let minimumPreviousMonthPerformanceAmount: Int
+    public let maximumAmount: Int
+}
+
+public struct BenefitLimitPolicy: Codable, Equatable, Sendable {
+    public let type: BenefitLimitPolicyKind
+    public let tiers: [BenefitLimitTier]?
 }
 
 public struct ManagedCard: Codable, Equatable, Sendable {
@@ -37,7 +55,8 @@ public struct ManagedCard: Codable, Equatable, Sendable {
     public let displayName: String
     public let issuerCode: String
     public let lastFour: String
-    public let performanceTargetAmount: Int
+    public let performanceThresholdAmounts: [Int]
+    public let benefitLimitPolicy: BenefitLimitPolicy
     public let performanceCalculationBasis: String
     public let benefits: [CardBenefit]
     public let performanceExclusions: [String]
@@ -49,7 +68,8 @@ public struct ManagedCard: Codable, Equatable, Sendable {
         displayName: String,
         issuerCode: String,
         lastFour: String,
-        performanceTargetAmount: Int,
+        performanceThresholdAmounts: [Int],
+        benefitLimitPolicy: BenefitLimitPolicy,
         performanceCalculationBasis: String,
         benefits: [CardBenefit],
         performanceExclusions: [String],
@@ -60,7 +80,8 @@ public struct ManagedCard: Codable, Equatable, Sendable {
         self.displayName = displayName
         self.issuerCode = issuerCode
         self.lastFour = lastFour
-        self.performanceTargetAmount = performanceTargetAmount
+        self.performanceThresholdAmounts = performanceThresholdAmounts
+        self.benefitLimitPolicy = benefitLimitPolicy
         self.performanceCalculationBasis = performanceCalculationBasis
         self.benefits = benefits
         self.performanceExclusions = performanceExclusions
@@ -84,24 +105,32 @@ public struct CardResponse: Codable, Equatable, Sendable {
     }
 }
 
+public struct CardCreateRequest: Codable, Equatable, Sendable {
+    public let cardTypeCode: String
+    public let displayName: String
+    public let lastFour: String
+
+    public init(cardTypeCode: String, displayName: String, lastFour: String) {
+        self.cardTypeCode = cardTypeCode
+        self.displayName = displayName
+        self.lastFour = lastFour
+    }
+}
+
 public struct CardUpdateRequest: Codable, Equatable, Sendable {
     public let displayName: String
     /// Accepted for wire compatibility with the issue #5 client. The server
     /// derives issuer identity from `cardTypeCode` and does not persist this.
     public let issuerCode: String?
     public let lastFour: String
-    public let performanceTargetAmount: Int
-
     public init(
         displayName: String,
         issuerCode: String? = nil,
-        lastFour: String,
-        performanceTargetAmount: Int
+        lastFour: String
     ) {
         self.displayName = displayName
         self.issuerCode = issuerCode
         self.lastFour = lastFour
-        self.performanceTargetAmount = performanceTargetAmount
     }
 }
 
@@ -164,9 +193,9 @@ public enum PerformanceDecision: String, Codable, Equatable, Sendable {
 
 public struct ManagedTransaction: Codable, Equatable, Sendable {
     public let id: UUID
-    public let cardId: UUID
-    public let cardDisplayName: String
-    public let cardLastFour: String
+    public let cardId: UUID?
+    public let cardDisplayName: String?
+    public let cardLastFour: String?
     public let capturedAt: Date
     public let occurredAt: Date
     public let parseStatus: StoredParseStatus
@@ -181,9 +210,9 @@ public struct ManagedTransaction: Codable, Equatable, Sendable {
 
     public init(
         id: UUID,
-        cardId: UUID,
-        cardDisplayName: String,
-        cardLastFour: String,
+        cardId: UUID?,
+        cardDisplayName: String?,
+        cardLastFour: String?,
         capturedAt: Date,
         occurredAt: Date,
         parseStatus: StoredParseStatus,
@@ -286,14 +315,14 @@ public struct BenefitProgress: Codable, Equatable, Sendable {
     public let label: String
     public let calculationAmount: Int
     public let receivedAmount: Int
-    public let maximumAmount: Int
+    public let maximumAmount: Int?
 
     public init(
         id: UUID,
         label: String,
         calculationAmount: Int,
         receivedAmount: Int,
-        maximumAmount: Int
+        maximumAmount: Int?
     ) {
         self.id = id
         self.label = label
@@ -303,10 +332,18 @@ public struct BenefitProgress: Codable, Equatable, Sendable {
     }
 }
 
+public struct DashboardBenefitLimit: Codable, Equatable, Sendable {
+    public let type: BenefitLimitPolicyKind
+    public let maximumAmount: Int?
+    public let receivedAmount: Int?
+    public let remainingAmount: Int?
+}
+
 public struct CardDashboard: Codable, Equatable, Sendable {
     public let cardId: UUID
     public let period: String
     public let performance: PerformanceProgress
+    public let benefitLimit: DashboardBenefitLimit
     public let benefits: [BenefitProgress]
     public let benefitUnconfirmedCount: Int
 
@@ -314,12 +351,14 @@ public struct CardDashboard: Codable, Equatable, Sendable {
         cardId: UUID,
         period: String,
         performance: PerformanceProgress,
+        benefitLimit: DashboardBenefitLimit,
         benefits: [BenefitProgress],
         benefitUnconfirmedCount: Int
     ) {
         self.cardId = cardId
         self.period = period
         self.performance = performance
+        self.benefitLimit = benefitLimit
         self.benefits = benefits
         self.benefitUnconfirmedCount = benefitUnconfirmedCount
     }

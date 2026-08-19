@@ -134,6 +134,11 @@ enum ProductWebPage {
             .cp-hero-value.is-negative strong { color: var(--cp-negative); }
             .cp-remaining { margin: 9px 0 0; color: var(--cp-subtle); }
             .cp-remaining strong { color: var(--cp-accent); }
+            .cp-goal-meta {
+              display: flex; justify-content: space-between; gap: 14px;
+              margin-top: 8px; color: var(--cp-muted); font-size: 13px;
+            }
+            .cp-goal-meta span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
             .cp-breakdown { margin: 22px 0 0; padding: 0; border-top: 1px solid var(--cp-line); }
             .cp-breakdown > div { display: flex; justify-content: space-between; gap: 16px; padding-top: 14px; }
             .cp-breakdown dt { color: var(--cp-subtle); }
@@ -191,6 +196,7 @@ enum ProductWebPage {
             .cp-check-row input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--cp-accent); }
             .cp-check-row label { font-weight: 650; }
             .cp-check-progress { grid-column: 2; margin-top: 8px; }
+            .cp-detail-performance-panel { margin-top: 14px; }
             .cp-switch-row { display: flex; justify-content: space-between; gap: 18px; align-items: center; padding: 18px 0; }
             .cp-switch-row input { width: 24px; height: 24px; accent-color: var(--cp-accent); }
             .cp-field { display: grid; gap: 8px; margin-top: 18px; }
@@ -237,6 +243,8 @@ enum ProductWebPage {
               .cp-panel-head { align-items: center; }
               #view-dashboard .cp-metric-label { display: grid; gap: 3px; }
               #view-dashboard .cp-metric-label strong { justify-self: start; }
+              .cp-detail-performance-panel .cp-metric-label { display: grid; gap: 4px; }
+              .cp-detail-performance-panel .cp-metric-label strong { justify-self: start; }
               .cp-month-picker { padding: 16px; }
               .cp-section-heading { display: grid; gap: 12px; }
               .cp-period-badge { justify-self: start; }
@@ -287,9 +295,10 @@ enum ProductWebPage {
                 </div>
                 <div class="cp-panel">
                   <div class="cp-panel-head"><h2>실적</h2></div>
-                  <div id="performance-value" class="cp-hero-value"><strong>0원</strong><span>/ 0원</span></div>
-                  <p id="remaining-value" class="cp-remaining">목표까지 <strong>0원</strong> 남았어요</p>
-                  <div class="cp-progress" role="progressbar" id="performance-progress" aria-label="월 실적 진행도"><span></span></div>
+                  <div id="performance-value" class="cp-hero-value"><strong>0원</strong><span id="performance-target">/ 0원</span></div>
+                  <p id="performance-remaining" class="cp-remaining">다음 실적 구간까지 <strong>0원</strong> 남았어요</p>
+                  <div class="cp-progress" role="progressbar" id="performance-progress" aria-label="다음 실적 구간 진행도"><span></span></div>
+                  <div class="cp-goal-meta"><span id="performance-goal-label"></span><span id="performance-goal-percent">0%</span></div>
                   <dl class="cp-breakdown">
                     <div><dt>실적 제외</dt><dd id="excluded-value">0원</dd></div>
                     <div><dt>미확인 거래</dt><dd id="unconfirmed-value" class="cp-unconfirmed">0건 · 0원</dd></div>
@@ -303,7 +312,12 @@ enum ProductWebPage {
                   </details>
                 </div>
                 <div class="cp-panel">
-                  <div class="cp-panel-head"><h2>혜택</h2></div>
+                  <div class="cp-panel-head"><h2 id="benefit-panel-title">혜택</h2></div>
+                  <div id="integrated-benefit-summary" hidden>
+                    <div class="cp-hero-value"><strong id="integrated-remaining">0원</strong><span id="integrated-maximum">/ 0원</span></div>
+                    <p class="cp-remaining">이번 달 <strong id="integrated-received">0원</strong> 사용했어요</p>
+                    <div class="cp-progress" role="progressbar" id="integrated-benefit-progress" aria-label="통합혜택한도 사용량"><span></span></div>
+                  </div>
                   <div id="dashboard-benefits"></div>
                   <details class="cp-policy" id="benefit-exclusion-policy">
                     <summary>
@@ -345,25 +359,29 @@ enum ProductWebPage {
               </section>
 
               <section id="view-settings" hidden>
-                <div class="cp-heading"><h1>카드 설정</h1><p>선택한 카드의 표시 정보와 실적 목표를 관리합니다.</p></div>
+                <div class="cp-heading"><h1>카드 설정</h1><p>카드 정보와 월별 수동 조정을 관리합니다.</p></div>
                 <form id="settings-form">
                   <div class="cp-field"><label for="setting-name">카드 이름</label><input id="setting-name" required></div>
                   <div class="cp-field"><label for="setting-issuer">카드사</label><input id="setting-issuer" readonly></div>
                   <div class="cp-field"><label for="setting-last-four">끝 네 자리</label><input id="setting-last-four" inputmode="numeric" minlength="4" maxlength="4" required></div>
-                  <div class="cp-field"><label for="setting-target">월 실적 목표</label><input id="setting-target" type="number" inputmode="numeric" min="1" required></div>
                   <section class="cp-settings-section" aria-labelledby="settings-offset-title">
                     <div class="cp-section-heading">
-                      <div><h2 id="settings-offset-title">이번 달 수동 조정</h2><p>CherryPicker에서 확인할 수 없는 금액만 더하거나 빼세요.</p></div>
-                      <span class="cp-period-badge" id="settings-current-period"></span>
+                      <div><h2 id="settings-offset-title">직전 월 실적 조정</h2></div>
+                      <span class="cp-period-badge" id="settings-performance-period"></span>
                     </div>
                     <div class="cp-field">
-                      <label for="setting-performance-offset">실적 오프셋</label>
-                      <input id="setting-performance-offset" data-offset-input type="text" inputmode="text" autocomplete="off" aria-describedby="setting-performance-offset-help setting-performance-offset-error">
-                      <p class="cp-field-help" id="setting-performance-offset-help">거래로 계산한 이번 달 실적에 더해집니다. 차감하려면 음수로 입력하세요.</p>
+                      <label for="setting-performance-offset" id="setting-performance-offset-label">실적 오프셋</label>
+                      <input id="setting-performance-offset" data-offset-input type="text" inputmode="text" autocomplete="off" aria-describedby="setting-performance-offset-error">
                       <p class="cp-field-error" id="setting-performance-offset-error" hidden>원 단위 정수로 입력해주세요.</p>
                     </div>
-                    <div class="cp-benefit-offsets" aria-labelledby="settings-benefit-offset-title">
-                      <div class="cp-subheading"><h3 id="settings-benefit-offset-title">혜택별 오프셋</h3><p>각 혜택에만 따로 반영됩니다.</p></div>
+                  </section>
+                  <section class="cp-settings-section" aria-labelledby="settings-benefit-offset-title">
+                    <div class="cp-section-heading">
+                      <div><h2 id="settings-benefit-offset-title">이번 달 혜택 조정</h2></div>
+                      <span class="cp-period-badge" id="settings-benefit-period"></span>
+                    </div>
+                    <div class="cp-benefit-offsets">
+                      <div class="cp-subheading"><h3>혜택별 오프셋</h3><p id="settings-benefit-help">각 혜택에만 따로 반영됩니다.</p></div>
                       <div id="settings-benefit-offsets"></div>
                     </div>
                   </section>
@@ -395,9 +413,11 @@ enum ProductWebPage {
                     <div class="cp-choice"><input id="performance-included" name="performance" type="radio" value="included"><label for="performance-included">인정</label></div>
                     <div class="cp-choice"><input id="performance-excluded" name="performance" type="radio" value="excluded"><label for="performance-excluded">제외</label></div>
                   </div>
-                  <div class="cp-panel" style="margin-top:14px">
-                    <div class="cp-metric-label"><span>이번 달 실적</span><strong id="detail-performance-value">0원 / 0원</strong></div>
-                    <div class="cp-progress" id="detail-performance-progress" role="progressbar" aria-label="검토 반영 후 카드 실적"><span></span></div>
+                  <div class="cp-panel cp-detail-performance-panel">
+                    <div class="cp-metric-label"><span>반영 후 이번 달 실적</span><strong id="detail-performance-value">0원 / 0원</strong></div>
+                    <p id="detail-performance-remaining" class="cp-remaining">다음 실적 구간까지 <strong>0원</strong> 남았어요</p>
+                    <div class="cp-progress" id="detail-performance-progress" role="progressbar" aria-label="검토 반영 후 다음 실적 구간 진행도"><span></span></div>
+                    <div class="cp-goal-meta"><span id="detail-performance-goal-label"></span><span id="detail-performance-goal-percent">0%</span></div>
                   </div>
                   <div class="cp-field"><label>해당 혜택</label></div>
                   <div id="detail-benefits"></div>
@@ -430,7 +450,7 @@ enum ProductWebPage {
               };
               const currentMonth = monthKeyForDate(new Date());
               const earliestMonth = '2026-08';
-              const state = { cards: [], selectedCardId: null, view: 'inbox', filter: 'all', month: currentMonth, activeTransaction: null, dashboard: null, returnView: 'inbox' };
+              const state = { cards: [], selectedCardId: null, view: 'inbox', filter: 'all', month: currentMonth, activeTransaction: null, dashboard: null, returnView: 'inbox', settingsPreviousOffsets: null, settingsCurrentOffsets: null };
               let visiblePickerYear = Number(currentMonth.slice(0, 4));
               const card = () => state.cards.find(value => value.id === state.selectedCardId);
 
@@ -569,13 +589,16 @@ enum ProductWebPage {
               }
 
               function transactionRow(transaction, includeCard) {
+                const cardLabel = transaction.cardDisplayName && transaction.cardLastFour
+                  ? `${transaction.cardDisplayName} · ${transaction.cardLastFour}`
+                  : '카드 미배정';
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.className = 'cp-row';
-                button.setAttribute('aria-label', `${transaction.cardDisplayName}, ${transaction.merchant || '확인 필요'}, ${won(transaction.amount)}, ${kindLabel(transaction.kind)}, 상세 검토`);
+                button.setAttribute('aria-label', `${cardLabel}, ${transaction.merchant || '확인 필요'}, ${won(transaction.amount)}, ${kindLabel(transaction.kind)}, 상세 검토`);
                 const main = document.createElement('span'); main.className = 'cp-row-main';
                 if (includeCard) {
-                  const cardText = document.createElement('span'); cardText.className = 'cp-row-card'; cardText.textContent = `${transaction.cardDisplayName} · ${transaction.cardLastFour}`; main.append(cardText);
+                  const cardText = document.createElement('span'); cardText.className = 'cp-row-card'; cardText.textContent = cardLabel; main.append(cardText);
                 }
                 const merchant = document.createElement('span'); merchant.className = 'cp-row-merchant'; merchant.textContent = transaction.merchant || '확인 필요';
                 const meta = document.createElement('span'); meta.className = 'cp-row-meta'; meta.textContent = `${kindLabel(transaction.kind)} · ${dateLabel(transaction.occurredAt)}`;
@@ -609,6 +632,55 @@ enum ProductWebPage {
                 element.querySelector('span').style.width = `${percent}%`;
               }
 
+              function performanceGoalFor(currentAmount, selectedCard) {
+                const thresholds = [...new Set((selectedCard?.performanceThresholdAmounts || [])
+                  .filter(value => Number.isInteger(value) && value > 0))].sort((left, right) => left - right);
+                const targetAmount = thresholds.find(value => currentAmount < value) || thresholds.at(-1) || 1;
+                return {
+                  currentAmount,
+                  targetAmount,
+                  remainingAmount: Math.max(0, targetAmount - currentAmount)
+                };
+              }
+
+              function renderPerformanceGoal(performance, selectedCard, detail = false) {
+                const thresholds = selectedCard?.performanceThresholdAmounts || [];
+                const multipleThresholds = thresholds.length > 1;
+                const highestThreshold = thresholds.at(-1) || performance.targetAmount;
+                const achieved = performance.remainingAmount === 0;
+                const highestAchieved = multipleThresholds && performance.currentAmount >= highestThreshold;
+                const value = detail ? $('#detail-performance-value') : $('#performance-value strong');
+                const target = detail ? null : $('#performance-target');
+                const remaining = detail ? $('#detail-performance-remaining') : $('#performance-remaining');
+                const progress = detail ? $('#detail-performance-progress') : $('#performance-progress');
+                const goalLabel = detail ? $('#detail-performance-goal-label') : $('#performance-goal-label');
+                const percentLabel = detail ? $('#detail-performance-goal-percent') : $('#performance-goal-percent');
+                const percent = Math.round(Math.max(0, Math.min(100, performance.currentAmount / performance.targetAmount * 100)));
+
+                if (detail) value.textContent = `${won(performance.currentAmount)} / ${won(performance.targetAmount)}`;
+                else {
+                  value.textContent = won(performance.currentAmount);
+                  target.textContent = `/ ${won(performance.targetAmount)}`;
+                }
+                remaining.replaceChildren();
+                if (achieved) {
+                  const message = document.createElement('strong');
+                  message.textContent = highestAchieved ? '최고 실적 구간을 달성했어요' : '실적 조건을 달성했어요';
+                  remaining.append(message);
+                } else {
+                  remaining.append(multipleThresholds ? '다음 실적 구간까지 ' : '실적 조건까지 ');
+                  const amount = document.createElement('strong'); amount.textContent = won(performance.remainingAmount);
+                  remaining.append(amount, ' 남았어요');
+                }
+                goalLabel.textContent = multipleThresholds
+                  ? highestAchieved
+                    ? `${highestThreshold / 10_000}만원 이상 최고 구간`
+                    : `${performance.targetAmount / 10_000}만원 실적 구간`
+                  : `${performance.targetAmount / 10_000}만원 실적 조건`;
+                percentLabel.textContent = `${percent}%`;
+                setProgress(progress, performance.currentAmount, performance.targetAmount);
+              }
+
               async function loadDashboard() {
                 if (!state.selectedCardId) return showView('inbox');
                 syncPeriodControls();
@@ -620,33 +692,34 @@ enum ProductWebPage {
                 const performance = data.dashboard.performance;
                 const performanceValue = $('#performance-value');
                 performanceValue.classList.toggle('is-negative', performance.currentAmount < 0);
-                performanceValue.replaceChildren();
-                const current = document.createElement('strong'); current.textContent = won(performance.currentAmount);
-                const target = document.createElement('span'); target.textContent = `/ ${won(performance.targetAmount)}`;
-                performanceValue.append(current, target);
-                $('#remaining-value').replaceChildren();
-                if (performance.remainingAmount > 0) {
-                  $('#remaining-value').append('목표까지 ');
-                  const remaining = document.createElement('strong'); remaining.textContent = won(performance.remainingAmount);
-                  $('#remaining-value').append(remaining, ' 남았어요');
-                } else {
-                  const achieved = document.createElement('strong'); achieved.textContent = '목표를 달성했어요';
-                  $('#remaining-value').append(achieved);
-                }
-                setProgress($('#performance-progress'), performance.currentAmount, performance.targetAmount);
+                renderPerformanceGoal(performance, selected);
                 $('#excluded-value').textContent = won(performance.excludedAmount);
                 $('#unconfirmed-value').textContent = `${performance.unconfirmedCount}건 · ${won(performance.unconfirmedAmount)}`;
+                const integrated = data.dashboard.benefitLimit.type === 'integrated';
+                $('#benefit-panel-title').textContent = integrated ? '남은 통합혜택한도' : '혜택';
+                $('#integrated-benefit-summary').hidden = !integrated;
+                if (integrated) {
+                  const limit = data.dashboard.benefitLimit;
+                  $('#integrated-remaining').textContent = won(limit.remainingAmount);
+                  $('#integrated-maximum').textContent = `/ ${won(limit.maximumAmount)}`;
+                  $('#integrated-received').textContent = won(limit.receivedAmount);
+                  setProgress($('#integrated-benefit-progress'), limit.receivedAmount, limit.maximumAmount);
+                }
                 const benefits = $('#dashboard-benefits'); benefits.replaceChildren();
                 data.dashboard.benefits.forEach(value => {
                   const wrap = document.createElement('div'); wrap.className = 'cp-benefit';
                   const label = document.createElement('div'); label.className = 'cp-metric-label';
                   const name = document.createElement('span'); name.className = 'cp-benefit-name'; name.textContent = value.label;
-                  const amount = document.createElement('strong'); amount.textContent = `${won(value.receivedAmount)} / ${won(value.maximumAmount)}`;
+                  const amount = document.createElement('strong'); amount.textContent = integrated ? won(value.calculationAmount) : `${won(value.receivedAmount)} / ${won(value.maximumAmount)}`;
                   label.append(name, amount);
                   const definition = selected.benefits.find(benefit => benefit.id === value.id);
                   const terms = document.createElement('p'); terms.className = 'cp-benefit-terms'; terms.textContent = definition ? benefitTerms(definition) : '';
-                  const progress = document.createElement('div'); progress.className = 'cp-progress'; progress.setAttribute('role', 'progressbar'); progress.setAttribute('aria-label', value.label); progress.append(document.createElement('span'));
-                  setProgress(progress, value.receivedAmount, value.maximumAmount); wrap.append(label, progress, terms); benefits.append(wrap);
+                  wrap.append(label);
+                  if (!integrated) {
+                    const progress = document.createElement('div'); progress.className = 'cp-progress'; progress.setAttribute('role', 'progressbar'); progress.setAttribute('aria-label', value.label); progress.append(document.createElement('span'));
+                    setProgress(progress, value.receivedAmount, value.maximumAmount); wrap.append(progress);
+                  }
+                  wrap.append(terms); benefits.append(wrap);
                 });
                 if (data.dashboard.benefits.length === 0) {
                   const empty = document.createElement('p'); empty.className = 'cp-empty'; empty.textContent = '등록된 혜택이 없습니다.'; benefits.append(empty);
@@ -693,12 +766,20 @@ enum ProductWebPage {
               async function loadSettings() {
                 const selected = card(); if (!selected) return;
                 $('#setting-name').value = selected.displayName; $('#setting-issuer').value = selected.issuerCode;
-                $('#setting-last-four').value = selected.lastFour; $('#setting-target').value = selected.performanceTargetAmount;
-                $('#settings-current-period').textContent = monthLabel(currentMonth);
-                const data = await api(`/api/v1/cards/${state.selectedCardId}/monthly-offsets?month=${currentMonth}`);
-                const offsets = data.monthlyOffsets;
+                $('#setting-last-four').value = selected.lastFour;
+                const previousMonth = shiftedMonth(currentMonth, -1);
+                $('#settings-performance-period').textContent = monthLabel(previousMonth);
+                $('#settings-benefit-period').textContent = monthLabel(currentMonth);
+                $('#setting-performance-offset-label').textContent = `${Number(previousMonth.slice(5))}월 실적 오프셋`;
+                const [previousData, currentData] = await Promise.all([
+                  api(`/api/v1/cards/${state.selectedCardId}/monthly-offsets?month=${previousMonth}`),
+                  api(`/api/v1/cards/${state.selectedCardId}/monthly-offsets?month=${currentMonth}`)
+                ]);
+                state.settingsPreviousOffsets = previousData.monthlyOffsets;
+                state.settingsCurrentOffsets = currentData.monthlyOffsets;
+                const offsets = currentData.monthlyOffsets;
                 const performanceInput = $('#setting-performance-offset');
-                performanceInput.value = String(offsets.performanceOffsetAmount);
+                performanceInput.value = String(previousData.monthlyOffsets.performanceOffsetAmount);
                 setOffsetInputError(performanceInput, false);
 
                 const values = new Map(offsets.benefitOffsets.map(value => [value.benefitId, value.offsetAmount]));
@@ -709,7 +790,7 @@ enum ProductWebPage {
                   const inputID = `setting-benefit-offset-${benefit.id}`;
                   const label = document.createElement('label'); label.htmlFor = inputID; label.textContent = benefit.label;
                   const input = document.createElement('input'); input.id = inputID; input.type = 'text'; input.inputMode = 'text'; input.autocomplete = 'off'; input.dataset.offsetInput = ''; input.dataset.benefitId = benefit.id; input.value = String(values.get(benefit.id) || 0); input.setAttribute('aria-describedby', `${inputID}-help ${inputID}-error`);
-                  const help = document.createElement('p'); help.className = 'cp-field-help'; help.id = `${inputID}-help`; help.textContent = `적용 결과는 0원에서 월 최대 ${won(benefit.maximumAmount)} 사이로 제한됩니다.`;
+                  const help = document.createElement('p'); help.className = 'cp-field-help'; help.id = `${inputID}-help`; help.textContent = selected.benefitLimitPolicy.type === 'integrated' ? '전체 합계는 통합혜택한도를 넘지 않습니다.' : `적용 결과는 0원에서 월 최대 ${won(benefit.maximumAmount)} 사이로 제한됩니다.`;
                   const error = document.createElement('p'); error.className = 'cp-field-error'; error.id = `${inputID}-error`; error.textContent = '원 단위 정수로 입력해주세요.'; error.hidden = true;
                   field.append(label, input, help, error); wrap.append(field); prepareOffsetInput(input); return wrap;
                 }));
@@ -722,7 +803,9 @@ enum ProductWebPage {
               }
 
               function benefitTerms(benefit) {
-                const values = [`조건: 건당 ${won(benefit.minimumTransactionAmount)} 이상`];
+                const values = [];
+                if (benefit.minimumTransactionAmount > 0) values.push(`조건: 건당 ${won(benefit.minimumTransactionAmount)} 이상`);
+                if (benefit.recurringPaymentOnly) values.push('조건: 월 정기결제');
                 benefit.exclusionNotes.forEach(note => values.push(`제외: ${note}`));
                 return values.join('\n');
               }
@@ -738,8 +821,11 @@ enum ProductWebPage {
                 let performance = dashboard.performance.currentAmount;
                 if (transaction.reviewStatus === 'reviewed' && !transaction.aggregationExcluded && transaction.performance === 'included' && transaction.amount != null) performance -= sign * transaction.amount;
                 if (!excluded && chosenPerformance === 'included' && transaction.amount != null) performance += sign * transaction.amount;
-                $('#detail-performance-value').textContent = `${won(performance)} / ${won(dashboard.performance.targetAmount)}`;
-                setProgress($('#detail-performance-progress'), performance, dashboard.performance.targetAmount);
+                renderPerformanceGoal(
+                  performanceGoalFor(performance, selectedCard),
+                  selectedCard,
+                  true
+                );
 
                 selectedCard.benefits.forEach(benefit => {
                   const checkbox = document.getElementById(`benefit-${benefit.id}`);
@@ -747,10 +833,12 @@ enum ProductWebPage {
                   let received = dashboard.benefits.find(value => value.id === benefit.id)?.calculationAmount || 0;
                   if (transaction.reviewStatus === 'reviewed' && !transaction.aggregationExcluded && transaction.benefitIds.includes(benefit.id)) received -= benefitContribution(transaction, benefit);
                   if (!excluded && checkbox.checked) received += benefitContribution(transaction, benefit);
-                  received = Math.max(0, Math.min(benefit.maximumAmount, received));
+                  received = Math.max(0, benefit.maximumAmount == null ? received : Math.min(benefit.maximumAmount, received));
                   progressWrap.hidden = !checkbox.checked || excluded;
-                  progressWrap.querySelector('strong').textContent = `${won(received)} / ${won(benefit.maximumAmount)}`;
-                  setProgress(progressWrap.querySelector('.cp-progress'), received, benefit.maximumAmount);
+                  progressWrap.querySelector('strong').textContent = benefit.maximumAmount == null ? won(received) : `${won(received)} / ${won(benefit.maximumAmount)}`;
+                  const progress = progressWrap.querySelector('.cp-progress');
+                  progress.hidden = benefit.maximumAmount == null;
+                  if (benefit.maximumAmount != null) setProgress(progress, received, benefit.maximumAmount);
                 });
               }
 
@@ -758,11 +846,15 @@ enum ProductWebPage {
                 clearError();
                 state.returnView = state.view;
                 const data = await api(`/api/v1/transactions/${id}`); state.activeTransaction = data.transaction;
-                state.selectedCardId = data.transaction.cardId; $('#card-selector').value = state.selectedCardId; setCardNavigationVisible(true);
-                const transaction = data.transaction, selectedCard = card();
+                const transaction = data.transaction;
+                state.selectedCardId = transaction.cardId || null; $('#card-selector').value = state.selectedCardId || ''; setCardNavigationVisible(Boolean(state.selectedCardId));
                 state.month = monthKeyForDate(transaction.occurredAt);
-                const dashboardData = await api(`/api/v1/cards/${state.selectedCardId}/dashboard?month=${state.month}`); state.dashboard = dashboardData.dashboard;
-                $('#detail-card').textContent = `${transaction.cardDisplayName} · ${transaction.cardLastFour}`;
+                if (state.selectedCardId) {
+                  const dashboardData = await api(`/api/v1/cards/${state.selectedCardId}/dashboard?month=${state.month}`); state.dashboard = dashboardData.dashboard;
+                } else {
+                  state.dashboard = null;
+                }
+                $('#detail-card').textContent = transaction.cardDisplayName && transaction.cardLastFour ? `${transaction.cardDisplayName} · ${transaction.cardLastFour}` : '카드 미배정';
                 $('#detail-amount').textContent = won(transaction.amount); $('#detail-merchant').textContent = transaction.merchant || '확인 필요';
                 $('#detail-kind').textContent = kindLabel(transaction.kind); $('#detail-date').textContent = dateLabel(transaction.occurredAt);
                 $('#detail-parse-status').textContent = transaction.parseStatus === 'parsed' ? '문자를 정상적으로 분류했습니다.' : '문자 분류를 확인해야 합니다.';
@@ -770,7 +862,7 @@ enum ProductWebPage {
                 $('#performance-included').checked = transaction.performance === 'included'; $('#performance-excluded').checked = transaction.performance === 'excluded';
                 $('#detail-memo').value = transaction.memo || '';
                 const benefits = $('#detail-benefits'); benefits.replaceChildren();
-                selectedCard.benefits.forEach(benefit => {
+                (card()?.benefits || []).forEach(benefit => {
                   const row = document.createElement('div'); row.className = 'cp-check-row';
                   const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.id = `benefit-${benefit.id}`; checkbox.value = benefit.id; checkbox.checked = transaction.benefitIds.includes(benefit.id);
                   const label = document.createElement('label'); label.htmlFor = checkbox.id; label.textContent = benefit.label;
@@ -779,7 +871,12 @@ enum ProductWebPage {
                   const progress = document.createElement('div'); progress.className = 'cp-progress'; progress.setAttribute('role', 'progressbar'); progress.setAttribute('aria-label', benefit.label); progress.append(document.createElement('span'));
                   wrap.append(metric, progress); row.append(checkbox, label, wrap); benefits.append(row); checkbox.addEventListener('change', updateReviewPreview);
                 });
-                await showView('detail'); updateReviewPreview();
+                const isAssigned = Boolean(state.selectedCardId);
+                $('#detail-save').disabled = !isAssigned;
+                $('#review-section').classList.toggle('is-disabled', !isAssigned);
+                $$('#review-section input').forEach(input => { input.disabled = !isAssigned; });
+                await showView('detail');
+                if (isAssigned) updateReviewPreview();
               }
 
               function toast(message) { const value = $('#toast'); value.textContent = message; value.hidden = false; window.setTimeout(() => { value.hidden = true; }, 1800); }
@@ -843,10 +940,12 @@ enum ProductWebPage {
                   return showError(new Error('오프셋은 원 단위 정수로 입력해 주세요.'));
                 }
                 try {
-                  const body = { displayName: $('#setting-name').value, lastFour: $('#setting-last-four').value, performanceTargetAmount: Number($('#setting-target').value) };
+                  const body = { displayName: $('#setting-name').value, lastFour: $('#setting-last-four').value };
                   const data = await api(`/api/v1/cards/${state.selectedCardId}`, { method: 'PUT', body: JSON.stringify(body) });
                   const benefitOffsets = offsetInputs.filter(input => input.dataset.benefitId).map(input => ({ benefitId: input.dataset.benefitId, offsetAmount: offsetValues.get(input) }));
-                  await api(`/api/v1/cards/${state.selectedCardId}/monthly-offsets?month=${currentMonth}`, { method: 'PUT', body: JSON.stringify({ performanceOffsetAmount: offsetValues.get($('#setting-performance-offset')), benefitOffsets }) });
+                  const previousMonth = shiftedMonth(currentMonth, -1);
+                  await api(`/api/v1/cards/${state.selectedCardId}/monthly-offsets?month=${previousMonth}`, { method: 'PUT', body: JSON.stringify({ performanceOffsetAmount: offsetValues.get($('#setting-performance-offset')), benefitOffsets: state.settingsPreviousOffsets?.benefitOffsets || [] }) });
+                  await api(`/api/v1/cards/${state.selectedCardId}/monthly-offsets?month=${currentMonth}`, { method: 'PUT', body: JSON.stringify({ performanceOffsetAmount: state.settingsCurrentOffsets?.performanceOffsetAmount || 0, benefitOffsets }) });
                   state.cards = state.cards.map(value => value.id === data.card.id ? data.card : value); await loadCards(); $('#card-selector').value = state.selectedCardId; clearError(); toast('카드 설정을 저장했습니다');
                 } catch (error) {
                   showError(error);

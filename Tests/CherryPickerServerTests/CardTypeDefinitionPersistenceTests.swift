@@ -16,7 +16,7 @@ final class CardTypeDefinitionPersistenceTests: XCTestCase {
 
         XCTAssertEqual(card.cardTypeCode, definition.code)
         XCTAssertEqual(card.issuerCode, definition.issuerCode)
-        XCTAssertEqual(card.performanceTargetAmount, definition.defaultMonthlyPerformanceTargetAmount)
+        XCTAssertEqual(card.benefitLimitPolicy.type, .perBenefit)
         XCTAssertEqual(card.performanceCalculationBasis, "‘더나은’ 정상 이용금액")
         XCTAssertEqual(card.benefits.map(\.label), definition.benefits.map(\.label))
         XCTAssertEqual(card.benefits.count, 3)
@@ -44,14 +44,13 @@ final class CardTypeDefinitionPersistenceTests: XCTestCase {
             request: CardUpdateRequest(
                 displayName: "생활비 카드",
                 issuerCode: "MUTATION-MUST-NOT-WIN",
-                lastFour: "1234",
-                performanceTargetAmount: 350_000
+                lastFour: "1234"
             )
         )
 
         XCTAssertEqual(updated?.displayName, "생활비 카드")
         XCTAssertEqual(updated?.lastFour, "1234")
-        XCTAssertEqual(updated?.performanceTargetAmount, 350_000)
+        XCTAssertEqual(updated?.benefitLimitPolicy.type, .perBenefit)
         XCTAssertEqual(updated?.cardTypeCode, definition.code)
         XCTAssertEqual(updated?.issuerCode, definition.issuerCode)
     }
@@ -108,7 +107,7 @@ final class CardTypeDefinitionPersistenceTests: XCTestCase {
         XCTAssertEqual(card.displayName, "기존 사용자 이름")
         XCTAssertEqual(card.issuerCode, "MG")
         XCTAssertEqual(card.lastFour, "9876")
-        XCTAssertEqual(card.performanceTargetAmount, 420_000)
+        XCTAssertEqual(card.benefitLimitPolicy.type, .perBenefit)
     }
 
     private func temporaryDatabaseURL() -> URL {

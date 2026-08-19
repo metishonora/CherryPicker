@@ -20,6 +20,15 @@ final class MonthlyOffsetsPersistenceTests: XCTestCase {
             cardID = card.id
             benefitIDs = card.benefits.map(\.id)
 
+            _ = try await store.updateMonthlyOffsets(
+                cardID: card.id,
+                month: try DashboardMonth(identifier: "2026-07"),
+                request: MonthlyOffsetsUpdateRequest(
+                    performanceOffsetAmount: 300_000,
+                    benefitOffsets: []
+                )
+            )
+
             let augustValue = try await store.updateMonthlyOffsets(
                 cardID: card.id,
                 month: august,
@@ -50,7 +59,6 @@ final class MonthlyOffsetsPersistenceTests: XCTestCase {
             let augustDashboardValue = try await store.dashboard(cardID: card.id, month: august)
             let augustDashboard = try XCTUnwrap(augustDashboardValue)
             XCTAssertEqual(augustDashboard.performance.currentAmount, 20_000)
-            XCTAssertEqual(augustDashboard.performance.remainingAmount, 280_000)
             XCTAssertEqual(augustDashboard.benefits.map(\.receivedAmount), [1_500, 0, 0])
             XCTAssertEqual(augustDashboard.benefits.map(\.calculationAmount), [1_500, -500, 0])
 
@@ -60,7 +68,8 @@ final class MonthlyOffsetsPersistenceTests: XCTestCase {
             )
             let septemberDashboard = try XCTUnwrap(septemberDashboardValue)
             XCTAssertEqual(septemberDashboard.performance.currentAmount, -10_000)
-            XCTAssertEqual(septemberDashboard.benefits.map(\.receivedAmount), [0, 0, 6_000])
+            XCTAssertEqual(septemberDashboard.benefits.map(\.receivedAmount), [0, 0, 0])
+            XCTAssertEqual(septemberDashboard.benefits.map(\.calculationAmount), [0, 0, 7_000])
         }
 
         do {

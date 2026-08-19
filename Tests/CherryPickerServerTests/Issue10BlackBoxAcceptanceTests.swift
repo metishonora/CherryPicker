@@ -95,6 +95,14 @@ final class Issue10BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
 
                 try await putOffsets(
                     cardID: resolvedCardID,
+                    month: "2026-07",
+                    performance: 300_000,
+                    benefits: [],
+                    using: client
+                )
+
+                try await putOffsets(
+                    cardID: resolvedCardID,
                     month: "2026-08",
                     performance: 50_000,
                     benefits: [["benefitId": resolvedBenefitID, "offsetAmount": 1_500]],
@@ -131,7 +139,8 @@ final class Issue10BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
                 ) { response in
                     XCTAssertEqual(response.status, .ok)
                     let html = String(decoding: response.body.readableBytesView, as: UTF8.self)
-                    XCTAssertTrue(html.contains("이번 달 수동 조정"))
+                    XCTAssertTrue(html.contains("직전 월 실적 조정"))
+                    XCTAssertTrue(html.contains("이번 달 혜택 조정"))
                     XCTAssertTrue(html.contains("setting-performance-offset"))
                     XCTAssertTrue(html.contains("settings-benefit-offsets"))
                     XCTAssertTrue(html.contains("/monthly-offsets?month=${currentMonth}"))

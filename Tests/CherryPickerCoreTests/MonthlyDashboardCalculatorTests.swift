@@ -21,7 +21,6 @@ final class MonthlyDashboardCalculatorTests: XCTestCase {
         let month = try DashboardMonth(identifier: "2026-08")
         let result = calculator.calculate(
             period: try month.interval,
-            targetAmount: 300_000,
             benefits: [],
             transactions: [
                 transaction(amount: 10_000, performance: .included),
@@ -38,7 +37,6 @@ final class MonthlyDashboardCalculatorTests: XCTestCase {
         )
 
         XCTAssertEqual(result.performance.currentAmount, -40_000)
-        XCTAssertEqual(result.performance.remainingAmount, 340_000)
         XCTAssertEqual(result.performance.excludedAmount, 4_000)
         XCTAssertEqual(result.performance.unconfirmedAmount, 3_000)
         XCTAssertEqual(result.performance.unconfirmedCount, 1)
@@ -56,7 +54,6 @@ final class MonthlyDashboardCalculatorTests: XCTestCase {
 
         let stillCapped = calculator.calculate(
             period: try month.interval,
-            targetAmount: 300_000,
             benefits: [benefit],
             transactions: [
                 transaction(amount: 100_000, benefitIDs: [benefitID]),
@@ -68,7 +65,6 @@ final class MonthlyDashboardCalculatorTests: XCTestCase {
 
         let belowCap = calculator.calculate(
             period: try month.interval,
-            targetAmount: 300_000,
             benefits: [benefit],
             transactions: [
                 transaction(amount: 100_000, benefitIDs: [benefitID]),
@@ -80,7 +76,6 @@ final class MonthlyDashboardCalculatorTests: XCTestCase {
 
         let floored = calculator.calculate(
             period: try month.interval,
-            targetAmount: 300_000,
             benefits: [benefit],
             transactions: [
                 transaction(amount: 100_000, benefitIDs: [benefitID]),
@@ -105,7 +100,6 @@ final class MonthlyDashboardCalculatorTests: XCTestCase {
 
         let result = calculator.calculate(
             period: try month.interval,
-            targetAmount: 300_000,
             benefits: benefits,
             transactions: [
                 transaction(
@@ -124,7 +118,6 @@ final class MonthlyDashboardCalculatorTests: XCTestCase {
         )
 
         XCTAssertEqual(result.performance.currentAmount, 280_000)
-        XCTAssertEqual(result.performance.remainingAmount, 20_000)
         XCTAssertEqual(result.benefits[0].calculationAmount, 3_000)
         XCTAssertEqual(result.benefits[0].receivedAmount, 3_000)
         XCTAssertEqual(result.benefits[1].calculationAmount, 65_000)

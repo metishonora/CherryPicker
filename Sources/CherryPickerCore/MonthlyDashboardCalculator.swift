@@ -48,6 +48,16 @@ public struct DashboardMonth: Equatable, Sendable {
         String(format: "%04d-%02d", year, month)
     }
 
+    public var previous: DashboardMonth {
+        get throws {
+            try DashboardMonth(
+                identifier: month == 1
+                    ? String(format: "%04d-12", year - 1)
+                    : String(format: "%04d-%02d", year, month - 1)
+            )
+        }
+    }
+
     public var interval: DateInterval {
         get throws {
             var calendar = Calendar(identifier: .gregorian)
@@ -69,9 +79,9 @@ public struct DashboardMonth: Equatable, Sendable {
 public struct DashboardBenefitDefinition: Equatable, Sendable {
     public let id: UUID
     public let rateBasisPoints: Int
-    public let maximumAmount: Int
+    public let maximumAmount: Int?
 
-    public init(id: UUID, rateBasisPoints: Int, maximumAmount: Int) {
+    public init(id: UUID, rateBasisPoints: Int, maximumAmount: Int?) {
         self.id = id
         self.rateBasisPoints = rateBasisPoints
         self.maximumAmount = maximumAmount
@@ -118,7 +128,6 @@ public struct DashboardTransactionInput: Equatable, Sendable {
 
 public struct DashboardPerformanceCalculation: Equatable, Sendable {
     public let currentAmount: Int
-    public let remainingAmount: Int
     public let excludedAmount: Int
     public let unconfirmedAmount: Int
     public let unconfirmedCount: Int
@@ -142,7 +151,6 @@ public struct MonthlyDashboardCalculator: Sendable {
 
     public func calculate(
         period: DateInterval,
-        targetAmount: Int,
         benefits: [DashboardBenefitDefinition],
         transactions: [DashboardTransactionInput],
         performanceOffsetAmount: Int = 0,
@@ -187,7 +195,6 @@ public struct MonthlyDashboardCalculator: Sendable {
         return MonthlyDashboardCalculation(
             performance: DashboardPerformanceCalculation(
                 currentAmount: adjustedCurrentAmount,
-                remainingAmount: max(0, targetAmount - adjustedCurrentAmount),
                 excludedAmount: excludedAmount,
                 unconfirmedAmount: unconfirmedAmount,
                 unconfirmedCount: unconfirmedCount
@@ -198,10 +205,9 @@ public struct MonthlyDashboardCalculator: Sendable {
                 return DashboardBenefitCalculation(
                     id: benefit.id,
                     calculationAmount: adjustedAmount,
-                    receivedAmount: max(
-                        0,
-                        min(benefit.maximumAmount, adjustedAmount)
-                    )
+                    receivedAmount: max(0, benefit.maximumAmount.map {
+                        min($0, adjustedAmount)
+                    } ?? adjustedAmount)
                 )
             },
             benefitUnconfirmedCount: benefitUnconfirmedCount

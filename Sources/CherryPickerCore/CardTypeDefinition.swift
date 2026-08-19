@@ -7,9 +7,10 @@ public struct CardTypeBenefitDefinition: Equatable, Sendable {
     public let label: String
     public let eligibleMerchants: [String]
     public let minimumTransactionAmount: Int
-    public let requiredPreviousMonthPerformanceAmount: Int
+    public let requiredPreviousMonthPerformanceAmount: Int?
     public let rateBasisPoints: Int
-    public let monthlyMaximumAmount: Int
+    public let monthlyMaximumAmount: Int?
+    public let recurringPaymentOnly: Bool
     public let exclusionNotes: [String]
 
     public init(
@@ -18,9 +19,10 @@ public struct CardTypeBenefitDefinition: Equatable, Sendable {
         label: String,
         eligibleMerchants: [String],
         minimumTransactionAmount: Int,
-        requiredPreviousMonthPerformanceAmount: Int,
+        requiredPreviousMonthPerformanceAmount: Int?,
         rateBasisPoints: Int,
-        monthlyMaximumAmount: Int,
+        monthlyMaximumAmount: Int?,
+        recurringPaymentOnly: Bool = false,
         exclusionNotes: [String] = []
     ) {
         self.id = id
@@ -31,8 +33,24 @@ public struct CardTypeBenefitDefinition: Equatable, Sendable {
         self.requiredPreviousMonthPerformanceAmount = requiredPreviousMonthPerformanceAmount
         self.rateBasisPoints = rateBasisPoints
         self.monthlyMaximumAmount = monthlyMaximumAmount
+        self.recurringPaymentOnly = recurringPaymentOnly
         self.exclusionNotes = exclusionNotes
     }
+}
+
+public struct PerformanceBenefitTier: Equatable, Sendable {
+    public let minimumPreviousMonthPerformanceAmount: Int
+    public let maximumAmount: Int
+
+    public init(minimumPreviousMonthPerformanceAmount: Int, maximumAmount: Int) {
+        self.minimumPreviousMonthPerformanceAmount = minimumPreviousMonthPerformanceAmount
+        self.maximumAmount = maximumAmount
+    }
+}
+
+public enum CardTypeBenefitLimitPolicy: Equatable, Sendable {
+    case perBenefit
+    case integrated(tiers: [PerformanceBenefitTier])
 }
 
 /// Message trigger inputs exposed by a card type for capture automation.
@@ -67,7 +85,12 @@ public protocol CardTypeDefining: Sendable {
     var displayName: String { get }
     var issuerCode: String { get }
     var messageIdentification: CardMessageIdentificationRules { get }
-    var defaultMonthlyPerformanceTargetAmount: Int { get }
+    /// Retained only as a database compatibility default for the retired column.
+    var legacyMonthlyPerformanceTargetAmount: Int { get }
+    /// Fixed, ordered performance thresholds used to derive the next visible goal.
+    /// These belong to the card policy and are never editable per card instance.
+    var performanceThresholdAmounts: [Int] { get }
+    var benefitLimitPolicy: CardTypeBenefitLimitPolicy { get }
     var performanceCalculationBasis: String { get }
     var benefits: [CardTypeBenefitDefinition] { get }
     var performanceExclusions: [String] { get }
@@ -75,6 +98,13 @@ public protocol CardTypeDefining: Sendable {
 
     func identifies(messageBody: String) -> Bool
     func parse(_ originalMessage: String) -> ParseResult
+    func matches(parsedCardIdentifier: String, storedLastFour: String) -> Bool
+}
+
+public extension CardTypeDefining {
+    func matches(parsedCardIdentifier: String, storedLastFour: String) -> Bool {
+        parsedCardIdentifier == storedLastFour
+    }
 }
 
 /// The single card type supported by the MVP.
@@ -87,11 +117,13 @@ public struct MGTheBetterCheckCardDefinition: CardTypeDefining {
     public let displayName = "MG 더나은 체크카드"
     public let issuerCode = "MG"
     public let messageIdentification = CardMessageIdentificationRules(
-        senderIdentifiers: [],
+        senderIdentifiers: ["1599-9000"],
         cardBodyMarkers: ["MG카드(", "MG체크카드(", "MG더나은카드(", "MG더나은체크카드("],
         transactionBodyMarkers: ["체크승인", "승인취소"]
     )
-    public let defaultMonthlyPerformanceTargetAmount = 300_000
+    public let legacyMonthlyPerformanceTargetAmount = 300_000
+    public let performanceThresholdAmounts = [300_000]
+    public let benefitLimitPolicy = CardTypeBenefitLimitPolicy.perBenefit
     public let performanceCalculationBasis = "‘더나은’ 정상 이용금액"
     public let benefits: [CardTypeBenefitDefinition] = [
         CardTypeBenefitDefinition(
@@ -160,5 +192,116 @@ public struct MGTheBetterCheckCardDefinition: CardTypeDefining {
 
     public func parse(_ originalMessage: String) -> ParseResult {
         parser.parse(originalMessage)
+    }
+}
+
+/// MG+S 하나카드 definition used by ingestion and owned-card creation.
+///
+/// Benefit aggregation for this card uses one performance-tiered integrated
+/// cap shared by all three benefit definitions.
+public struct MGPlusSHanaCardDefinition: CardTypeDefining {
+    public let code = "hana.mg-plus-s"
+    public let displayName = "MG+S 하나카드"
+    public let issuerCode = "HANA"
+    public let messageIdentification = CardMessageIdentificationRules(
+        senderIdentifiers: ["1800-1111"],
+        cardBodyMarkers: ["MG+하나"],
+        transactionBodyMarkers: ["승인"]
+    )
+    public let legacyMonthlyPerformanceTargetAmount = 300_000
+    public let performanceThresholdAmounts = [300_000, 600_000, 1_000_000]
+    public let benefitLimitPolicy = CardTypeBenefitLimitPolicy.integrated(tiers: [
+        PerformanceBenefitTier(minimumPreviousMonthPerformanceAmount: 0, maximumAmount: 0),
+        PerformanceBenefitTier(minimumPreviousMonthPerformanceAmount: 300_000, maximumAmount: 15_000),
+        PerformanceBenefitTier(minimumPreviousMonthPerformanceAmount: 600_000, maximumAmount: 30_000),
+        PerformanceBenefitTier(minimumPreviousMonthPerformanceAmount: 1_000_000, maximumAmount: 60_000)
+    ])
+    public let performanceCalculationBasis = "전월 정상 이용금액"
+    public let benefits: [CardTypeBenefitDefinition] = [
+        CardTypeBenefitDefinition(
+            id: UUID(uuidString: "00000000-0000-0012-0001-000000000001")!,
+            code: "simple-pay-statement-discount",
+            label: "간편결제 10% 청구할인",
+            eligibleMerchants: ["네이버페이", "카카오페이", "토스페이", "SSG페이", "11pay", "스마일페이"],
+            minimumTransactionAmount: 10_000,
+            requiredPreviousMonthPerformanceAmount: nil,
+            rateBasisPoints: 1_000,
+            monthlyMaximumAmount: nil
+        ),
+        CardTypeBenefitDefinition(
+            id: UUID(uuidString: "00000000-0000-0012-0002-000000000002")!,
+            code: "streaming-statement-discount",
+            label: "영상 스트리밍 50% 청구할인",
+            eligibleMerchants: ["유튜브", "디즈니플러스", "Wavve", "넷플릭스", "티빙"],
+            minimumTransactionAmount: 0,
+            requiredPreviousMonthPerformanceAmount: nil,
+            rateBasisPoints: 5_000,
+            monthlyMaximumAmount: nil,
+            recurringPaymentOnly: true
+        ),
+        CardTypeBenefitDefinition(
+            id: UUID(uuidString: "00000000-0000-0012-0003-000000000003")!,
+            code: "digital-membership-statement-discount",
+            label: "디지털 멤버십 50% 청구할인",
+            eligibleMerchants: ["네이버플러스멤버십", "컬리멤버스", "쿠팡와우멤버십"],
+            minimumTransactionAmount: 0,
+            requiredPreviousMonthPerformanceAmount: nil,
+            rateBasisPoints: 5_000,
+            monthlyMaximumAmount: nil,
+            recurringPaymentOnly: true
+        )
+    ]
+    public let performanceExclusions = [
+        "국세 및 지방세",
+        "수도요금 및 전기요금",
+        "우편요금, 과태료, 범칙금과 벌금",
+        "국가, 공공기관 또는 공공단체가 부과하는 부담금",
+        "도시가스 요금",
+        "아파트관리비",
+        "국민연금, 고용보험료, 산재보험료와 건강보험료",
+        "스쿨뱅킹",
+        "초·중·고 학교 납입금",
+        "대학 및 대학원 등록금",
+        "상품권 및 기프트카드 구매",
+        "선불카드 및 선불전자지급수단 충전금액(하나머니 등)",
+        "부동산 임대료"
+    ]
+    public let benefitExclusions = [
+        "국세",
+        "지방세",
+        "그 외 공과금(우편요금, 과태료, 범칙금, 벌금, 국가·공공기관·공공단체가 부과하는 부담금)",
+        "국민연금, 고용보험료, 산재보험료와 건강보험료 납부 금액",
+        "수도요금",
+        "스쿨뱅킹",
+        "초·중·고 학교 납입금",
+        "대학등록금",
+        "대학원등록금",
+        "상품권 및 기프트카드 구매",
+        "선불카드 및 선불전자지급수단(하나머니 등) 충전 금액",
+        "부동산 임대료",
+        "무이자 할부 및 부분 무이자 할부 이용금액 전체"
+    ]
+
+    private let parser: MGPlusSHanaCardMessageParser
+
+    public init(parser: MGPlusSHanaCardMessageParser = MGPlusSHanaCardMessageParser()) {
+        self.parser = parser
+    }
+
+    public func identifies(messageBody: String) -> Bool {
+        let compactBody = messageBody.filter { !$0.isWhitespace }
+        return compactBody.contains("MG+하나") && compactBody.contains("승인")
+    }
+
+    public func parse(_ originalMessage: String) -> ParseResult {
+        parser.parse(originalMessage)
+    }
+
+    public func matches(parsedCardIdentifier: String, storedLastFour: String) -> Bool {
+        guard storedLastFour.count == 4, storedLastFour.allSatisfy(\.isNumber) else {
+            return false
+        }
+        let digits = Array(storedLastFour)
+        return parsedCardIdentifier == "\(digits[0])*\(digits[2])*"
     }
 }

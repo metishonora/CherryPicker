@@ -1,0 +1,869 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Issue 12 · 전월 실적 기반 혜택한도 프로토타입</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: light-dark(#e9edf2, #0c0e10);
+      --surface: light-dark(#ffffff, #171a1d);
+      --soft: light-dark(#f2f4f6, #202428);
+      --soft-strong: light-dark(#e9edf1, #292e34);
+      --text: light-dark(#191f28, #f2f4f6);
+      --subtle: light-dark(#4e5968, #b0b8c1);
+      --muted: light-dark(#8b95a1, #8b95a1);
+      --line: light-dark(#e5e8eb, #2d3339);
+      --accent: light-dark(#e94d79, #ff7895);
+      --accent-soft: light-dark(#fff0f4, #3a2028);
+      --track: light-dark(#dfe4e9, #333a43);
+      --warning: light-dark(#8a5b00, #f1c36d);
+      --positive: light-dark(#16825d, #67d6ae);
+      --shadow: 0 24px 70px rgb(20 31 47 / 14%);
+    }
+
+    * { box-sizing: border-box; }
+    html { background: var(--bg); }
+    body {
+      margin: 0;
+      color: var(--text);
+      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    button, input, select { font: inherit; color: inherit; }
+    button { cursor: pointer; touch-action: manipulation; }
+    [hidden] { display: none !important; }
+
+    .prototype-layout {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+    .review-tools {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: 100vh;
+      padding: 24px;
+      overflow: auto;
+      color: #f7f8fa;
+      background: #191f28;
+    }
+    .review-tools h1 { margin: 0; font-size: 18px; }
+    .review-tools > p { margin: 8px 0 24px; color: #b0b8c1; font-size: 13px; }
+    .review-field { display: grid; gap: 7px; margin-top: 18px; }
+    .review-field label { color: #d1d6db; font-size: 13px; font-weight: 700; }
+    .review-field select {
+      width: 100%;
+      min-height: 44px;
+      padding: 9px 11px;
+      border: 1px solid #3d4650;
+      border-radius: 11px;
+      color: #f7f8fa;
+      background: #252b32;
+      font-size: 14px;
+    }
+    .review-note {
+      margin: 22px 0 0;
+      padding: 14px;
+      border: 1px solid #39414a;
+      border-radius: 14px;
+      color: #b9c1ca;
+      background: #20252b;
+      font-size: 12px;
+    }
+    .review-note strong { display: block; margin-bottom: 5px; color: #fff; }
+    .preview-stage { padding: 30px; }
+    .product-shell {
+      width: min(100%, 760px);
+      min-height: calc(100vh - 60px);
+      margin: 0 auto;
+      overflow: hidden;
+      border-radius: 24px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .product-header {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px 14px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .brand { display: grid; gap: 1px; }
+    .brand strong { font-size: 20px; }
+    .brand span { color: var(--muted); font-size: 13px; }
+    .card-select {
+      min-width: 220px;
+      max-width: 58%;
+      padding: 10px 34px 10px 12px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--soft);
+    }
+    .product-nav {
+      display: flex;
+      gap: 4px;
+      overflow-x: auto;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      scrollbar-width: none;
+    }
+    .product-nav button {
+      flex: 0 0 auto;
+      padding: 10px 12px;
+      border: 0;
+      border-radius: 12px;
+      color: var(--muted);
+      background: transparent;
+      font-weight: 650;
+    }
+    .product-nav button[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
+    .product-main { padding: 34px 24px 100px; }
+    .heading { margin-bottom: 28px; }
+    .heading h2 { margin: 0; font-size: clamp(26px, 6vw, 34px); line-height: 1.25; letter-spacing: -.04em; }
+    .heading p { margin: 10px 0 0; color: var(--subtle); }
+    .month-control {
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr) 44px;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 18px;
+      padding: 8px;
+      border-radius: 16px;
+      background: var(--soft);
+    }
+    .month-control button {
+      min-height: 44px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--surface);
+      font-size: 25px;
+    }
+    .month-control button:disabled { cursor: default; opacity: .34; }
+    .month-control strong { text-align: center; font-size: 18px; }
+
+    .panel { padding: 22px; border-radius: 20px; background: var(--soft); }
+    .panel + .panel { margin-top: 18px; }
+    .panel-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+    .panel-head h3 { margin: 0; font-size: 18px; }
+    .panel-head span { color: var(--muted); font-size: 13px; }
+    .hero-label { margin: 0 0 6px; color: var(--subtle); font-size: 14px; }
+    .hero-value { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; }
+    .hero-value strong {
+      font-size: clamp(30px, 8vw, 42px);
+      line-height: 1.15;
+      letter-spacing: -.045em;
+      font-variant-numeric: tabular-nums;
+    }
+    .hero-value span { color: var(--muted); font-weight: 650; }
+    .supporting { margin: 9px 0 0; color: var(--subtle); }
+    .supporting strong { color: var(--accent); }
+    .performance-goal-copy { margin-top: 10px; }
+    .performance-goal-copy strong { color: var(--accent); }
+    .goal-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .goal-meta span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .breakdown { margin: 22px 0 0; padding: 0; border-top: 1px solid var(--line); }
+    .breakdown > div { display: flex; justify-content: space-between; gap: 16px; padding-top: 14px; }
+    .breakdown dt { color: var(--subtle); }
+    .breakdown dd { margin: 0; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+    .unconfirmed { color: var(--warning); }
+
+    .progress {
+      height: 12px;
+      margin-top: 13px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: var(--track);
+    }
+    .progress span {
+      display: block;
+      height: 100%;
+      width: 0;
+      border-radius: inherit;
+      background: var(--accent);
+      transition: width .18s ease;
+    }
+    .no-limit-message {
+      margin-top: 16px;
+      padding: 14px;
+      border-radius: 14px;
+      color: var(--subtle);
+      background: var(--surface);
+      font-size: 14px;
+    }
+
+    .benefit-summary { margin-top: 26px; }
+    .benefit-summary h4 { margin: 0; font-size: 16px; }
+    .benefit-list { margin-top: 14px; border-top: 1px solid var(--line); }
+    .benefit-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      padding: 17px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .benefit-row-main { min-width: 0; }
+    .benefit-row strong { font-size: 16px; }
+    .benefit-row p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+    .benefit-amount { align-self: center; font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .individual-benefit + .individual-benefit { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
+    .metric-label { display: flex; justify-content: space-between; gap: 16px; }
+    .metric-label strong:last-child { font-variant-numeric: tabular-nums; }
+    .individual-benefit p { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+
+    .detail-back {
+      padding: 0;
+      border: 0;
+      color: var(--subtle);
+      background: transparent;
+      font-weight: 700;
+    }
+    .facts {
+      margin-top: 22px;
+      padding: 22px;
+      border-radius: 20px;
+      background: var(--soft);
+    }
+    .facts-card { color: var(--subtle); font-size: 14px; }
+    .facts-amount { margin-top: 8px; font-size: 34px; font-weight: 800; letter-spacing: -.04em; }
+    .facts-grid {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 9px 18px;
+      margin: 22px 0 0;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+    .facts-grid dt { color: var(--subtle); }
+    .facts-grid dd { margin: 0; text-align: right; }
+    .review-section { margin-top: 28px; padding-top: 28px; border-top: 1px solid var(--line); }
+    .review-section h3 { margin: 0; font-size: 20px; }
+    .choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+    .choice { position: relative; }
+    .choice input { position: absolute; opacity: 0; }
+    .choice label {
+      display: block;
+      padding: 14px;
+      border: 2px solid transparent;
+      border-radius: 14px;
+      text-align: center;
+      background: var(--soft);
+    }
+    .choice input:checked + label {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-soft);
+      font-weight: 700;
+    }
+    .review-goal { margin-top: 14px; padding: 18px; border-radius: 18px; background: var(--soft); }
+    .review-goal .metric-label { align-items: baseline; }
+    .review-goal .metric-label span { color: var(--subtle); }
+    .review-goal .metric-label strong { font-size: 17px; }
+    .review-benefits { margin-top: 20px; }
+    .review-benefits > span { display: block; margin-bottom: 10px; color: var(--subtle); font-weight: 650; }
+    .review-check {
+      display: flex;
+      gap: 11px;
+      align-items: center;
+      padding: 14px;
+      border-radius: 14px;
+      background: var(--soft);
+    }
+    .review-check + .review-check { margin-top: 8px; }
+    .review-check input { width: 20px; height: 20px; accent-color: var(--accent); }
+    .review-check label { font-weight: 650; }
+
+    details.policy { margin-top: 22px; border-top: 1px solid var(--line); }
+    details.policy summary {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding-top: 17px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    details.policy summary span:last-child { color: var(--muted); font-size: 13px; }
+    details.policy ul { margin: 14px 0 0; padding-left: 20px; color: var(--subtle); font-size: 14px; }
+    details.policy li + li { margin-top: 8px; }
+
+    .settings-section + .settings-section { margin-top: 34px; padding-top: 28px; border-top: 1px solid var(--line); }
+    .settings-head { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; }
+    .settings-head h3 { margin: 0; font-size: 20px; }
+    .settings-head p { margin: 7px 0 0; color: var(--subtle); }
+    .period-badge {
+      flex: 0 0 auto;
+      padding: 7px 10px;
+      border-radius: 999px;
+      color: var(--accent);
+      background: var(--accent-soft);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .field { display: grid; gap: 8px; margin-top: 18px; }
+    .field label { color: var(--subtle); font-weight: 650; }
+    .field input {
+      width: 100%;
+      min-height: 50px;
+      padding: 13px 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--soft);
+      font-size: 16px;
+    }
+    .field input[readonly] { color: var(--muted); }
+    .field-help, .field-error { margin: 0; font-size: 13px; }
+    .field-help { color: var(--muted); }
+    .field-error { color: #d52f4c; }
+    .offset-preview {
+      margin-top: 18px;
+      padding: 16px;
+      border-radius: 16px;
+      background: var(--soft);
+    }
+    .offset-preview p { margin: 0; color: var(--subtle); font-size: 13px; }
+    .offset-preview strong { display: block; margin-top: 4px; font-size: 18px; }
+    .offset-preview .next-limit { margin-top: 10px; color: var(--positive); font-weight: 700; }
+    .benefit-offsets { margin-top: 28px; }
+    .benefit-offsets h4 { margin: 0; font-size: 17px; }
+    .benefit-offsets > p { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
+    .actions { display: grid; grid-template-columns: 1fr 1.35fr; gap: 10px; margin-top: 28px; }
+    .button { min-height: 52px; padding: 13px 18px; border: 0; border-radius: 15px; background: var(--soft); font-weight: 700; }
+    .button-primary { color: #17191d; background: var(--accent); }
+    .toast {
+      position: fixed;
+      left: calc(50% + 140px);
+      bottom: 24px;
+      z-index: 30;
+      translate: -50% 0;
+      padding: 12px 18px;
+      border-radius: 999px;
+      color: var(--text);
+      background: var(--soft-strong);
+      box-shadow: 0 12px 30px rgb(0 0 0 / 20%);
+    }
+    button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--accent) 36%, transparent);
+      outline-offset: 2px;
+    }
+
+    @media (max-width: 900px) {
+      .prototype-layout { display: block; }
+      .review-tools { position: static; width: 100%; height: auto; padding: 16px 20px; }
+      .review-tools > p { margin-bottom: 14px; }
+      .review-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .review-field { margin-top: 0; }
+      .review-note { display: none; }
+      .preview-stage { padding: 18px; }
+      .product-shell { min-height: calc(100vh - 160px); border-radius: 20px; }
+      .toast { left: 50%; }
+    }
+    @media (max-width: 520px) {
+      .review-controls { grid-template-columns: 1fr; }
+      .preview-stage { padding: 0; }
+      .product-shell { min-height: 100vh; border-radius: 0; box-shadow: none; }
+      .product-header { padding: 16px; align-items: stretch; flex-direction: column; gap: 10px; }
+      .card-select { width: 100%; max-width: none; }
+      .product-nav { gap: 2px; padding: 8px; }
+      .product-nav button { padding: 8px; font-size: 14px; }
+      .product-main { padding: 28px 18px 90px; }
+      .panel { padding: 18px; }
+      .panel-head { align-items: center; }
+      .settings-head { display: grid; gap: 12px; }
+      .period-badge { justify-self: start; }
+      .review-goal .metric-label { display: grid; gap: 4px; }
+      .review-goal .metric-label strong:last-child { text-align: left; }
+      .actions { grid-template-columns: 1fr; }
+      .actions span { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) { .progress span { transition: none; } }
+  </style>
+</head>
+<body>
+  <div class="prototype-layout">
+    <aside class="review-tools" aria-label="프로토타입 검토 도구">
+      <h1>Issue #12 UI 검토</h1>
+      <p>이 영역은 제품 화면에 포함되지 않습니다.</p>
+      <div class="review-controls">
+        <div class="review-field">
+          <label for="scenario">검토 상태</label>
+          <select id="scenario">
+            <option value="standard">경계값 · 일부 사용</option>
+            <option value="no-limit">30만원 미만 · 한도 없음</option>
+            <option value="exhausted">100만원 이상 · 한도 소진</option>
+            <option value="legacy">기존 카드 · 혜택별 한도</option>
+          </select>
+        </div>
+        <div class="review-field">
+          <label for="viewport-hint">검토 폭 안내</label>
+          <select id="viewport-hint" disabled>
+            <option>창 크기로 반응형 확인</option>
+          </select>
+        </div>
+        <div class="review-field">
+          <label for="screen">검토 화면</label>
+          <select id="screen">
+            <option value="dashboard">대시보드</option>
+            <option value="detail">거래 검토</option>
+            <option value="settings">카드 설정</option>
+          </select>
+        </div>
+      </div>
+      <div class="review-note">
+        <strong>확인할 점</strong>
+        실적 목표는 사용자가 입력하지 않습니다. 카드 정책의 다음 실적 구간을 목표로 자동 선택하고, 대시보드와 거래 검토에서 같은 진행도를 보여줍니다.
+      </div>
+    </aside>
+
+    <div class="preview-stage">
+      <div class="product-shell">
+        <header class="product-header">
+          <div class="brand"><strong>CherryPicker</strong><span id="context-label">대시보드</span></div>
+          <select id="card-selector" class="card-select" aria-label="카드 선택">
+            <option value="mg-plus-s">MG+S 하나카드 · 1357</option>
+            <option value="legacy">MG 더나은 체크카드 · 2468</option>
+          </select>
+        </header>
+        <nav class="product-nav" aria-label="카드 메뉴">
+          <button type="button" data-view="detail">미확인 거래</button>
+          <button type="button" data-view="dashboard" aria-current="page">대시보드</button>
+          <button type="button">거래</button>
+          <button type="button" data-view="settings">카드 설정</button>
+        </nav>
+
+        <main class="product-main">
+          <section id="dashboard-view">
+            <div class="heading"><h2 id="dashboard-title">MG+S 하나카드</h2><p id="dashboard-meta">HANA · 1357</p></div>
+            <div class="month-control" aria-label="조회 월">
+              <button type="button" aria-label="이전 달">‹</button>
+              <strong>2026년 8월</strong>
+              <button type="button" aria-label="다음 달" disabled>›</button>
+            </div>
+
+            <section class="panel" aria-labelledby="performance-title">
+              <div class="panel-head"><h3 id="performance-title">실적</h3><span>2026년 8월</span></div>
+              <p class="hero-label">이번 달 누적 인정 실적</p>
+              <div class="hero-value"><strong id="current-performance">487,320원</strong><span id="performance-target">/ 600,000원</span></div>
+              <p id="performance-remaining" class="supporting performance-goal-copy">다음 실적 구간까지 <strong>112,680원</strong> 남았어요</p>
+              <div id="performance-progress" class="progress" role="progressbar" aria-label="다음 실적 구간 진행도" aria-valuemin="0" aria-valuemax="600000" aria-valuenow="487320"><span></span></div>
+              <div class="goal-meta"><span id="performance-goal-label">60만원 실적 구간</span><span id="performance-goal-percent">81%</span></div>
+              <dl class="breakdown">
+                <div><dt>실적 제외</dt><dd id="excluded-amount">32,400원</dd></div>
+                <div><dt>미확인 거래</dt><dd id="unconfirmed-amount" class="unconfirmed">2건 · 24,700원</dd></div>
+              </dl>
+              <details class="policy">
+                <summary><span>실적 제외 항목</span><span id="policy-count">16개</span></summary>
+                <ul id="policy-list">
+                  <li>국세·지방세와 공과금</li>
+                  <li>아파트관리비와 4대 보험료</li>
+                  <li>학교 납입금과 대학·대학원 등록금</li>
+                  <li>상품권·기프트카드 구매 및 선불수단 충전</li>
+                  <li>부동산 임대료</li>
+                </ul>
+              </details>
+            </section>
+
+            <section class="panel" aria-labelledby="benefit-title">
+              <div class="panel-head"><h3 id="benefit-title">혜택</h3><span>2026년 8월</span></div>
+              <div id="integrated-benefit">
+                <p class="hero-label">남은 통합혜택한도</p>
+                <div class="hero-value"><strong id="remaining-limit">17,350원</strong><span id="total-limit-label">/ 30,000원</span></div>
+                <p class="supporting">이번 달 <strong id="used-benefit">12,650원</strong> 사용했어요</p>
+                <div id="integrated-progress" class="progress" role="progressbar" aria-label="통합혜택한도 사용률" aria-valuemin="0" aria-valuemax="30000" aria-valuenow="12650"><span></span></div>
+
+                <p id="no-limit-message" class="no-limit-message" hidden>직전 월 최종 실적이 30만원 미만이라 이번 달에는 제공되는 혜택한도가 없습니다.</p>
+
+                <div class="benefit-summary">
+                  <h4>혜택별 받은 금액</h4>
+                  <div id="shared-benefit-list" class="benefit-list"></div>
+                </div>
+                <details class="policy" id="shared-benefit-exclusions">
+                  <summary><span>할인 제외 대상</span><span>13개</span></summary>
+                  <ul>
+                    <li>국세</li>
+                    <li>지방세</li>
+                    <li>그 외 공과금(우편요금, 과태료, 범칙금, 벌금, 국가·공공기관·공공단체가 부과하는 부담금)</li>
+                    <li>국민연금, 고용보험료, 산재보험료와 건강보험료 납부 금액</li>
+                    <li>수도요금</li>
+                    <li>스쿨뱅킹</li>
+                    <li>초·중·고 학교 납입금</li>
+                    <li>대학등록금</li>
+                    <li>대학원등록금</li>
+                    <li>상품권 및 기프트카드 구매</li>
+                    <li>선불카드 및 선불전자지급수단(하나머니 등) 충전 금액</li>
+                    <li>부동산 임대료</li>
+                    <li>무이자 할부 및 부분 무이자 할부 이용금액 전체</li>
+                  </ul>
+                </details>
+              </div>
+              <div id="individual-benefits" hidden></div>
+            </section>
+          </section>
+
+          <section id="settings-view" hidden>
+            <div class="heading"><h2>카드 설정</h2><p>카드 정보와 월별 수동 조정을 관리합니다.</p></div>
+            <form id="settings-form" novalidate>
+              <section class="settings-section">
+                <div class="field"><label for="setting-name">카드 이름</label><input id="setting-name" value="MG+S 하나카드"></div>
+                <div class="field"><label for="setting-issuer">카드사</label><input id="setting-issuer" value="HANA" readonly></div>
+                <div class="field"><label for="setting-last-four">끝 네 자리</label><input id="setting-last-four" value="1357" inputmode="numeric" maxlength="4"></div>
+              </section>
+
+              <section class="settings-section" aria-labelledby="offset-title">
+                <div class="settings-head">
+                  <div><h3 id="offset-title">직전 월 실적 조정</h3></div>
+                  <span class="period-badge">2026년 7월</span>
+                </div>
+                <div class="field">
+                  <label for="performance-offset">7월 실적 오프셋</label>
+                  <input id="performance-offset" value="25,000" inputmode="text" aria-describedby="offset-error">
+                  <p id="offset-error" class="field-error" hidden>원 단위 정수로 입력해주세요.</p>
+                </div>
+                <div class="offset-preview" aria-live="polite">
+                  <p>7월 최종 실적</p>
+                  <strong id="offset-final-preview">575,000원 + 25,000원 = 600,000원</strong>
+                  <p id="offset-limit-preview" class="next-limit">8월 통합혜택한도 30,000원</p>
+                </div>
+              </section>
+
+              <section id="benefit-offset-section" class="settings-section">
+                <div class="settings-head">
+                  <div><h3>이번 달 혜택 조정</h3></div>
+                  <span class="period-badge">2026년 8월</span>
+                </div>
+                <div class="benefit-offsets">
+                  <h4>혜택별 오프셋</h4>
+                  <p id="benefit-offset-help">각 혜택에만 반영되며, 전체 합계는 통합혜택한도를 넘지 않습니다.</p>
+                  <div class="field"><label id="offset-simple-label" for="offset-simple">간편결제 10% 청구할인</label><input id="offset-simple" value="0" inputmode="text"></div>
+                  <div class="field"><label id="offset-streaming-label" for="offset-streaming">영상 스트리밍 50% 청구할인</label><input id="offset-streaming" value="0" inputmode="text"></div>
+                  <div class="field"><label id="offset-membership-label" for="offset-membership">디지털 멤버십 50% 청구할인</label><input id="offset-membership" value="0" inputmode="text"></div>
+                </div>
+              </section>
+              <div class="actions"><span></span><button class="button button-primary" type="submit">저장</button></div>
+            </form>
+          </section>
+
+          <section id="detail-view" hidden>
+            <button id="detail-back" class="detail-back" type="button">‹ 미확인 거래</button>
+            <div class="facts">
+              <div id="detail-card" class="facts-card">MG+S 하나카드 · 1357</div>
+              <div class="facts-amount">15,000원</div>
+              <dl class="facts-grid">
+                <dt>사용처</dt><dd>합성 온라인 가맹점</dd>
+                <dt>거래 종류</dt><dd>승인</dd>
+                <dt>거래 일시</dt><dd>2026. 8. 19. 오후 3:20</dd>
+              </dl>
+            </div>
+
+            <section class="review-section" aria-labelledby="review-title">
+              <h3 id="review-title">검토</h3>
+              <div class="field"><label>실적</label></div>
+              <div class="choice-grid">
+                <div class="choice"><input id="review-included" name="review-performance" type="radio" value="included" checked><label for="review-included">인정</label></div>
+                <div class="choice"><input id="review-excluded" name="review-performance" type="radio" value="excluded"><label for="review-excluded">제외</label></div>
+              </div>
+              <div class="review-goal">
+                <div class="metric-label"><span>반영 후 이번 달 실적</span><strong id="detail-performance-value">502,320원 / 600,000원</strong></div>
+                <p id="detail-performance-remaining" class="supporting performance-goal-copy">다음 실적 구간까지 <strong>97,680원</strong> 남았어요</p>
+                <div id="detail-performance-progress" class="progress" role="progressbar" aria-label="검토 반영 후 다음 실적 구간 진행도"><span></span></div>
+                <div class="goal-meta"><span id="detail-performance-goal-label">60만원 실적 구간</span><span id="detail-performance-goal-percent">84%</span></div>
+              </div>
+              <div class="review-benefits">
+                <span>해당 혜택</span>
+                <div class="review-check"><input id="review-simple-pay" type="checkbox" checked><label for="review-simple-pay">간편결제 10% 청구할인</label></div>
+                <div class="review-check"><input id="review-streaming" type="checkbox"><label for="review-streaming">영상 스트리밍 50% 청구할인</label></div>
+                <div class="review-check"><input id="review-membership" type="checkbox"><label for="review-membership">디지털 멤버십 50% 청구할인</label></div>
+              </div>
+              <div class="actions"><button class="button" type="button">취소</button><button class="button button-primary" type="button">저장하고 확인</button></div>
+            </section>
+          </section>
+        </main>
+      </div>
+    </div>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden>저장했습니다</div>
+
+  <script>
+    (() => {
+      const won = value => `${Number(value).toLocaleString('ko-KR')}원`;
+      const tiers = [
+        { minimum: 1_000_000, limit: 60_000, label: '100만원 이상 구간' },
+        { minimum: 600_000, limit: 30_000, label: '60만원 이상 구간' },
+        { minimum: 300_000, limit: 15_000, label: '30만원 이상 구간' },
+        { minimum: Number.NEGATIVE_INFINITY, limit: 0, label: '30만원 미만 구간' }
+      ];
+      const performanceThresholds = [300_000, 600_000, 1_000_000];
+      const sharedBenefits = [
+        { name: '간편결제 10% 청구할인', terms: '조건: 건당 1만원 이상', amount: 7_850 },
+        { name: '영상 스트리밍 50% 청구할인', terms: '조건: 월 정기결제', amount: 2_450 },
+        { name: '디지털 멤버십 50% 청구할인', terms: '조건: 월 정기결제', amount: 2_350 }
+      ];
+      const scenarios = {
+        standard: { card: 'mg-plus-s', current: 487_320, excluded: 32_400, unconfirmed: '2건 · 24,700원', previousTransaction: 575_000, offset: 25_000, used: 12_650 },
+        'no-limit': { card: 'mg-plus-s', current: 128_400, excluded: 18_000, unconfirmed: '1건 · 9,900원', previousTransaction: 284_000, offset: 0, used: 0 },
+        exhausted: { card: 'mg-plus-s', current: 1_132_000, excluded: 44_000, unconfirmed: '0건 · 0원', previousTransaction: 1_040_000, offset: 0, used: 60_000 },
+        legacy: { card: 'legacy', current: 342_500, excluded: 12_800, unconfirmed: '1건 · 15,000원', previousTransaction: 315_000, offset: 0, used: 0 }
+      };
+      let activeScenario = 'standard';
+      let settingsOffset = 25_000;
+
+      const $ = selector => document.querySelector(selector);
+      const $$ = selector => Array.from(document.querySelectorAll(selector));
+      const tierFor = performance => tiers.find(tier => performance >= tier.minimum);
+
+      function performanceGoalFor(current, isLegacy) {
+        if (isLegacy) {
+          return {
+            target: 300_000,
+            remaining: Math.max(0, 300_000 - current),
+            achieved: current >= 300_000,
+            label: '30만원 실적 조건',
+            achievedLabel: '실적 조건을 달성했어요',
+            remainingLabel: '실적 조건까지'
+          };
+        }
+        const next = performanceThresholds.find(threshold => current < threshold);
+        if (next != null) {
+          return {
+            target: next,
+            remaining: next - current,
+            achieved: false,
+            label: `${next / 10_000}만원 실적 구간`,
+            remainingLabel: '다음 실적 구간까지'
+          };
+        }
+        return {
+          target: performanceThresholds.at(-1),
+          remaining: 0,
+          achieved: true,
+          label: '100만원 이상 최고 구간',
+          achievedLabel: '최고 실적 구간을 달성했어요'
+        };
+      }
+
+      function setProgress(element, current, maximum) {
+        const percent = maximum > 0 ? Math.max(0, Math.min(100, current / maximum * 100)) : 0;
+        element.setAttribute('aria-valuemax', String(maximum));
+        element.setAttribute('aria-valuenow', String(current));
+        element.querySelector('span').style.width = `${percent}%`;
+      }
+
+      function renderPerformanceGoal(current, isLegacy, detail = false) {
+        const goal = performanceGoalFor(current, isLegacy);
+        const value = detail ? $('#detail-performance-value') : $('#current-performance');
+        const target = detail ? null : $('#performance-target');
+        const remaining = detail ? $('#detail-performance-remaining') : $('#performance-remaining');
+        const progress = detail ? $('#detail-performance-progress') : $('#performance-progress');
+        const label = detail ? $('#detail-performance-goal-label') : $('#performance-goal-label');
+        const percentLabel = detail ? $('#detail-performance-goal-percent') : $('#performance-goal-percent');
+        const percent = Math.round(Math.max(0, Math.min(100, current / goal.target * 100)));
+
+        if (detail) value.textContent = `${won(current)} / ${won(goal.target)}`;
+        else {
+          value.textContent = won(current);
+          target.textContent = `/ ${won(goal.target)}`;
+        }
+        remaining.replaceChildren();
+        if (goal.achieved) {
+          const achieved = document.createElement('strong');
+          achieved.textContent = goal.achievedLabel;
+          remaining.append(achieved);
+        } else {
+          remaining.append(`${goal.remainingLabel} `);
+          const amount = document.createElement('strong');
+          amount.textContent = won(goal.remaining);
+          remaining.append(amount, ' 남았어요');
+        }
+        label.textContent = goal.label;
+        percentLabel.textContent = `${percent}%`;
+        setProgress(progress, current, goal.target);
+      }
+
+      function renderSharedBenefitRows(used, maximum) {
+        const ratio = sharedBenefits.reduce((sum, benefit) => sum + benefit.amount, 0);
+        const amounts = activeScenario === 'exhausted'
+          ? [25_000, 20_000, 15_000]
+          : activeScenario === 'no-limit'
+            ? [0, 0, 0]
+            : sharedBenefits.map(benefit => Math.round(benefit.amount * (ratio ? used / ratio : 0)));
+        const rows = sharedBenefits.map((benefit, index) => {
+          const row = document.createElement('div'); row.className = 'benefit-row';
+          const main = document.createElement('div'); main.className = 'benefit-row-main';
+          const name = document.createElement('strong'); name.textContent = benefit.name;
+          const terms = document.createElement('p'); terms.textContent = benefit.terms;
+          const amount = document.createElement('span'); amount.className = 'benefit-amount'; amount.textContent = won(Math.min(maximum, amounts[index]));
+          main.append(name, terms); row.append(main, amount); return row;
+        });
+        $('#shared-benefit-list').replaceChildren(...rows);
+      }
+
+      function renderLegacyBenefits() {
+        const definitions = [
+          ['간편결제 20% 할인캐시백', 4_800, 6_000, '건당 1만원 이상'],
+          ['온라인 쇼핑 20% 할인캐시백', 6_000, 6_000, '건당 1만원 이상'],
+          ['커피 20% 할인캐시백', 3_200, 6_000, '건당 5천원 이상']
+        ];
+        const fragments = definitions.map(([name, received, maximum, terms]) => {
+          const wrap = document.createElement('div'); wrap.className = 'individual-benefit';
+          const label = document.createElement('div'); label.className = 'metric-label';
+          const title = document.createElement('strong'); title.textContent = name;
+          const amount = document.createElement('strong'); amount.textContent = `${won(received)} / ${won(maximum)}`;
+          const progress = document.createElement('div'); progress.className = 'progress'; progress.setAttribute('role', 'progressbar'); progress.setAttribute('aria-label', name); progress.append(document.createElement('span')); setProgress(progress, received, maximum);
+          const description = document.createElement('p'); description.textContent = `조건: ${terms} · 전월 실적 30만원 이상`;
+          label.append(title, amount); wrap.append(label, progress, description); return wrap;
+        });
+        $('#individual-benefits').replaceChildren(...fragments);
+      }
+
+      function renderDashboard() {
+        const scenario = scenarios[activeScenario];
+        const isLegacy = scenario.card === 'legacy';
+        const previousFinal = scenario.previousTransaction + scenario.offset;
+        const tier = tierFor(previousFinal);
+        $('#card-selector').value = scenario.card;
+        $('#dashboard-title').textContent = isLegacy ? 'MG 더나은 체크카드' : 'MG+S 하나카드';
+        $('#dashboard-meta').textContent = isLegacy ? 'MG · 2468' : 'HANA · 1357';
+        renderPerformanceGoal(scenario.current, isLegacy);
+        $('#excluded-amount').textContent = won(scenario.excluded);
+        $('#unconfirmed-amount').textContent = scenario.unconfirmed;
+        $('#policy-count').textContent = isLegacy ? '2개' : '16개';
+        if (isLegacy) {
+          $('#policy-list').innerHTML = '<li>해외가맹점 이용금액</li><li>소액신용결제 및 후불교통 이용금액</li>';
+          $('#integrated-benefit').hidden = true;
+          $('#individual-benefits').hidden = false;
+          renderLegacyBenefits();
+        } else {
+          $('#policy-list').innerHTML = '<li>국세·지방세와 공과금</li><li>아파트관리비와 4대 보험료</li><li>학교 납입금과 대학·대학원 등록금</li><li>상품권·기프트카드 구매 및 선불수단 충전</li><li>부동산 임대료</li>';
+          $('#integrated-benefit').hidden = false;
+          $('#individual-benefits').hidden = true;
+          const used = Math.min(scenario.used, tier.limit);
+          $('#remaining-limit').textContent = won(Math.max(0, tier.limit - used));
+          $('#total-limit-label').textContent = `/ ${won(tier.limit)}`;
+          $('#used-benefit').textContent = won(used);
+          $('#no-limit-message').hidden = tier.limit !== 0;
+          $('#integrated-progress').hidden = tier.limit === 0;
+          setProgress($('#integrated-progress'), used, tier.limit);
+          renderSharedBenefitRows(used, tier.limit);
+        }
+        syncSettings(scenario);
+        renderDetail();
+      }
+
+      function renderDetail() {
+        const scenario = scenarios[activeScenario];
+        const isLegacy = scenario.card === 'legacy';
+        const included = $('#review-included').checked;
+        const reviewedPerformance = scenario.current + (included ? 15_000 : 0);
+        $('#detail-card').textContent = `${isLegacy ? 'MG 더나은 체크카드 · 2468' : 'MG+S 하나카드 · 1357'}`;
+        renderPerformanceGoal(reviewedPerformance, isLegacy, true);
+      }
+
+      function syncSettings(scenario) {
+        const isLegacy = scenario.card === 'legacy';
+        $('#setting-name').value = isLegacy ? 'MG 더나은 체크카드' : 'MG+S 하나카드';
+        $('#setting-issuer').value = isLegacy ? 'MG' : 'HANA';
+        $('#setting-last-four').value = isLegacy ? '2468' : '1357';
+        settingsOffset = scenario.offset;
+        $('#performance-offset').value = settingsOffset.toLocaleString('ko-KR');
+        const benefitLabels = isLegacy
+          ? ['간편결제 20% 할인캐시백', '온라인 쇼핑 20% 할인캐시백', '커피 20% 할인캐시백']
+          : ['간편결제 10% 청구할인', '영상 스트리밍 50% 청구할인', '디지털 멤버십 50% 청구할인'];
+        $('#offset-simple-label').textContent = benefitLabels[0];
+        $('#offset-streaming-label').textContent = benefitLabels[1];
+        $('#offset-membership-label').textContent = benefitLabels[2];
+        $('#benefit-offset-help').textContent = isLegacy
+          ? '각 혜택에만 반영되며, 혜택별 월 한도를 넘지 않습니다.'
+          : '각 혜택에만 반영되며, 전체 합계는 통합혜택한도를 넘지 않습니다.';
+        updateOffsetPreview();
+      }
+
+      function parseAmount(value) {
+        const compact = value.replaceAll(',', '').trim();
+        if (!/^-?\d+$/.test(compact)) return null;
+        const amount = Number(compact);
+        return Number.isSafeInteger(amount) ? amount : null;
+      }
+
+      function updateOffsetPreview() {
+        const scenario = scenarios[activeScenario];
+        const input = $('#performance-offset');
+        const parsed = parseAmount(input.value);
+        const invalid = parsed === null;
+        input.setAttribute('aria-invalid', String(invalid));
+        $('#offset-error').hidden = !invalid;
+        if (invalid) return;
+        settingsOffset = parsed;
+        const final = scenario.previousTransaction + parsed;
+        const tier = tierFor(final);
+        $('#offset-final-preview').textContent = `${won(scenario.previousTransaction)} ${parsed >= 0 ? '+' : '−'} ${won(Math.abs(parsed))} = ${won(final)}`;
+        $('#offset-limit-preview').textContent = `${scenario.card === 'legacy' ? '8월 혜택 조건 판정 실적' : '8월 통합혜택한도'} ${scenario.card === 'legacy' ? won(final) : won(tier.limit)}`;
+      }
+
+      function showView(view) {
+        $('#dashboard-view').hidden = view !== 'dashboard';
+        $('#settings-view').hidden = view !== 'settings';
+        $('#detail-view').hidden = view !== 'detail';
+        $('#context-label').textContent = view === 'dashboard' ? '대시보드' : view === 'settings' ? '카드 설정' : '거래 검토';
+        $('#screen').value = view;
+        $$('[data-view]').forEach(button => {
+          if (button.dataset.view === view) button.setAttribute('aria-current', 'page');
+          else button.removeAttribute('aria-current');
+        });
+        if (view === 'detail') renderDetail();
+      }
+
+      $('#scenario').addEventListener('change', event => {
+        activeScenario = event.target.value;
+        renderDashboard();
+        showView('dashboard');
+      });
+      $('#card-selector').addEventListener('change', event => {
+        activeScenario = event.target.value === 'legacy' ? 'legacy' : 'standard';
+        $('#scenario').value = activeScenario;
+        renderDashboard();
+        showView('dashboard');
+      });
+      $('#screen').addEventListener('change', event => showView(event.target.value));
+      $$('[data-view]').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
+      $$('input[name="review-performance"]').forEach(input => input.addEventListener('change', renderDetail));
+      $('#detail-back').addEventListener('click', () => showView('dashboard'));
+      $('#performance-offset').addEventListener('input', updateOffsetPreview);
+      $('#performance-offset').addEventListener('blur', () => {
+        updateOffsetPreview();
+        if ($('#performance-offset').getAttribute('aria-invalid') === 'false') $('#performance-offset').value = settingsOffset.toLocaleString('ko-KR');
+      });
+      $('#settings-form').addEventListener('submit', event => {
+        event.preventDefault();
+        updateOffsetPreview();
+        if ($('#performance-offset').getAttribute('aria-invalid') === 'true') return;
+        const scenario = scenarios[activeScenario];
+        scenario.offset = settingsOffset;
+        renderDashboard();
+        const toast = $('#toast'); toast.hidden = false;
+        window.setTimeout(() => { toast.hidden = true; }, 1800);
+      });
+
+      renderDashboard();
+    })();
+  </script>
+</body>
+</html>

@@ -72,6 +72,33 @@ public struct CherryPickerHTTPApplication {
             }
         }
 
+        router.post("/api/v1/cards") { request, _ async -> EditedResponse<String> in
+            guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
+                return Self.unauthorizedResponse()
+            }
+            guard Self.hasValidCSRFHeader(request) else {
+                return Self.forbiddenResponse()
+            }
+            do {
+                let body = try await request.body.collect(upTo: Self.maxBatchBodyBytes)
+                let create = try codec.decode(
+                    CardCreateRequest.self,
+                    from: Data(body.readableBytesView)
+                )
+                let card = try await store.createManagedCard(request: create)
+                return Self.jsonResponse(
+                    status: .created,
+                    data: try codec.encode(CardResponse(card: card))
+                )
+            } catch ManagementStoreError.invalidInput {
+                return Self.badRequestResponse()
+            } catch is DecodingError {
+                return Self.badRequestResponse()
+            } catch {
+                return Self.internalErrorResponse()
+            }
+        }
+
         router.put("/api/v1/cards/:id") { request, context async -> EditedResponse<String> in
             guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
                 return Self.unauthorizedResponse()

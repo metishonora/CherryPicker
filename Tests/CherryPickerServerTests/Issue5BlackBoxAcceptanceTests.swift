@@ -35,7 +35,7 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
                 XCTAssertNotNil(card["displayName"] as? String)
                 XCTAssertNotNil(card["issuerCode"] as? String)
                 XCTAssertNotNil(card["lastFour"] as? String)
-                XCTAssertNotNil(card["performanceTargetAmount"] as? Int)
+                XCTAssertNil(card["performanceTargetAmount"])
                 XCTAssertEqual(card["cardTypeCode"] as? String, "mg.the-better-check")
                 XCTAssertEqual(
                     card["performanceCalculationBasis"] as? String,
@@ -69,8 +69,7 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
                 let update: [String: Any] = [
                     "displayName": "생활비 카드",
                     "issuerCode": card["issuerCode"] as? String ?? "MG",
-                    "lastFour": card["lastFour"] as? String ?? "4775",
-                    "performanceTargetAmount": 350_000
+                    "lastFour": card["lastFour"] as? String ?? "4775"
                 ]
                 try await client.execute(
                     uri: "/api/v1/cards/\(cardID)",
@@ -82,7 +81,7 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
                     let updated = try cardObject(from: response.body)
                     XCTAssertEqual(updated["id"] as? String, cardID)
                     XCTAssertEqual(updated["displayName"] as? String, "생활비 카드")
-                    XCTAssertEqual(updated["performanceTargetAmount"] as? Int, 350_000)
+                    XCTAssertNil(updated["performanceTargetAmount"])
                 }
             }
         }
@@ -95,7 +94,7 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
                     cards.first { $0["id"] as? String == selectedCardID.get() }
                 )
                 XCTAssertEqual(card["displayName"] as? String, "생활비 카드")
-                XCTAssertEqual(card["performanceTargetAmount"] as? Int, 350_000)
+                XCTAssertNil(card["performanceTargetAmount"])
             }
         }
     }
@@ -361,6 +360,7 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
             let benefitID = try XCTUnwrap(
                 (card["benefits"] as? [[String: Any]])?.first?["id"] as? String
             )
+            try await qualifyExistingCardBenefits(cardID: cardID, using: client)
             let before = try await fetchDashboard(cardID: cardID, using: client)
             let beforePerformance = try performanceAmount(from: before)
             let beforeBenefit = try benefitAmount(id: benefitID, from: before)
@@ -385,7 +385,14 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
             let after = try await fetchDashboard(cardID: cardID, using: client)
             XCTAssertEqual(try performanceAmount(from: after), beforePerformance + 10_000)
             XCTAssertGreaterThan(try benefitAmount(id: benefitID, from: after), beforeBenefit)
-            XCTAssertNotNil((after["performance"] as? [String: Any])?["targetAmount"] as? Int)
+            XCTAssertEqual(
+                (after["performance"] as? [String: Any])?["targetAmount"] as? Int,
+                300_000
+            )
+            XCTAssertEqual(
+                (after["performance"] as? [String: Any])?["remainingAmount"] as? Int,
+                290_000
+            )
 
             let benefit = try XCTUnwrap(
                 (after["benefits"] as? [[String: Any]])?.first {
@@ -408,6 +415,7 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
             let benefitID = try XCTUnwrap(
                 (card["benefits"] as? [[String: Any]])?.first?["id"] as? String
             )
+            try await qualifyExistingCardBenefits(cardID: cardID, using: client)
 
             let approvalID = try await ingest(
                 makeApprovalEvent(
@@ -547,8 +555,7 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
             let update: [String: Any] = [
                 "displayName": "Must Not Save",
                 "issuerCode": card["issuerCode"] as? String ?? "MG",
-                "lastFour": card["lastFour"] as? String ?? "4775",
-                "performanceTargetAmount": 300_000
+                "lastFour": card["lastFour"] as? String ?? "4775"
             ]
             try await client.execute(
                 uri: "/api/v1/cards/\(cardID)",
@@ -562,6 +569,24 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
     }
 
     // MARK: - HTTP-only helpers
+
+    private func qualifyExistingCardBenefits<Client>(
+        cardID: String,
+        using client: Client
+    ) async throws where Client: TestClientProtocol {
+        let payload: [String: Any] = [
+            "performanceOffsetAmount": 300_000,
+            "benefitOffsets": []
+        ]
+        try await client.execute(
+            uri: "/api/v1/cards/\(cardID)/monthly-offsets?month=2026-07",
+            method: .put,
+            headers: managementHeaders(login: allowedLogin, mutation: true),
+            body: httpByteBuffer(try jsonData(payload))
+        ) { response in
+            try requireStatus(response, .ok)
+        }
+    }
 
     private func makeApplication(databaseURL: URL) throws -> some ApplicationProtocol {
         let store = try SQLiteEventStore(databaseURL: databaseURL)

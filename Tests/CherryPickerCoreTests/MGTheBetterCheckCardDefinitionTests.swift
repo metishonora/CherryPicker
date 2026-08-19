@@ -8,7 +8,7 @@ final class MGTheBetterCheckCardDefinitionTests: XCTestCase {
         XCTAssertEqual(definition.code, "mg.the-better-check")
         XCTAssertEqual(definition.displayName, "MG 더나은 체크카드")
         XCTAssertEqual(definition.issuerCode, "MG")
-        XCTAssertEqual(definition.defaultMonthlyPerformanceTargetAmount, 300_000)
+        XCTAssertEqual(definition.performanceThresholdAmounts, [300_000])
         XCTAssertEqual(definition.benefits.count, 3)
         XCTAssertEqual(Set(definition.benefits.map(\.code)).count, definition.benefits.count)
     }

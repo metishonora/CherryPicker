@@ -165,12 +165,13 @@ final class Issue4BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
             XCTAssertEqual(summary["excludedAmount"] as? Int, 4_000)
             XCTAssertEqual(summary["unconfirmedAmount"] as? Int, 3_000)
             XCTAssertEqual(summary["unconfirmedCount"] as? Int, 1)
+            XCTAssertEqual(summary["targetAmount"] as? Int, 300_000)
             XCTAssertEqual(summary["remainingAmount"] as? Int, 290_000)
             XCTAssertEqual(value["benefitUnconfirmedCount"] as? Int, 1)
         }
     }
 
-    func testIndependentCancellationCanMakePerformanceNegativeAndIncreaseRemainingTarget() async throws {
+    func testIndependentCancellationCanMakePerformanceNegativeAgainstAutomaticGoal() async throws {
         let databaseURL = try temporaryDatabaseURL()
         defer { removeDatabaseFiles(at: databaseURL) }
         let app = try makeApplication(databaseURL: databaseURL)
@@ -202,7 +203,7 @@ final class Issue4BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
         }
     }
 
-    func testPerformanceRemainingStopsAtZeroWithoutAnOverageField() async throws {
+    func testPerformanceUsesAutomaticGoalWithoutOverageField() async throws {
         let databaseURL = try temporaryDatabaseURL()
         defer { removeDatabaseFiles(at: databaseURL) }
         let app = try makeApplication(databaseURL: databaseURL)
@@ -229,6 +230,7 @@ final class Issue4BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
             let value = try await dashboard(cardID: cardID, month: "2026-08", using: client)
             let summary = performance(value)
             XCTAssertEqual(summary["currentAmount"] as? Int, 350_000)
+            XCTAssertEqual(summary["targetAmount"] as? Int, 300_000)
             XCTAssertEqual(summary["remainingAmount"] as? Int, 0)
             XCTAssertNil(summary["overageAmount"])
         }
@@ -246,6 +248,7 @@ final class Issue4BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
             let cardID = try requiredString(card, key: "id")
             let benefit = try XCTUnwrap((card["benefits"] as? [[String: Any]])?.first)
             let benefitID = try requiredString(benefit, key: "id")
+            try await qualifyExistingCardBenefits(cardID: cardID, using: client)
             let rate = try requiredInt(benefit, key: "rateBasisPoints")
             let maximum = try requiredInt(benefit, key: "maximumAmount")
             let approvalAmount = exactTransactionAmount(forBenefitAmount: maximum * 2, rate: rate)
@@ -376,6 +379,7 @@ final class Issue4BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
             let benefits = Array((card["benefits"] as? [[String: Any]] ?? []).prefix(2))
             XCTAssertEqual(benefits.count, 2)
             let benefitIDs = try benefits.map { try requiredString($0, key: "id") }
+            try await qualifyExistingCardBenefits(cardID: cardID, using: client)
             let amount = 20_000
             let approvalID = try await ingest(
                 approval(
@@ -441,7 +445,7 @@ final class Issue4BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
 
     // MARK: - Derived state, persistence, and card policy
 
-    func testReviewAndCardTargetChangesRecalculateImmediatelyAndSurviveRestart() async throws {
+    func testReviewChangesRecalculateImmediatelyAndSurviveRestart() async throws {
         let databaseURL = try temporaryDatabaseURL()
         defer { removeDatabaseFiles(at: databaseURL) }
         let transactionID = LockedIssue4Value<String?>(nil)
@@ -479,12 +483,6 @@ final class Issue4BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
                     benefitIDs: [],
                     using: client
                 )
-                try await updateCard(
-                    card: card,
-                    targetAmount: 350_000,
-                    using: client
-                )
-
                 let recalculated = try await dashboard(
                     cardID: resolvedCardID,
                     month: "2026-08",
@@ -493,8 +491,8 @@ final class Issue4BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
                 XCTAssertEqual(performance(recalculated)["currentAmount"] as? Int, 15_000)
                 XCTAssertEqual(performance(recalculated)["unconfirmedAmount"] as? Int, 0)
                 XCTAssertEqual(performance(recalculated)["unconfirmedCount"] as? Int, 0)
-                XCTAssertEqual(performance(recalculated)["targetAmount"] as? Int, 350_000)
-                XCTAssertEqual(performance(recalculated)["remainingAmount"] as? Int, 335_000)
+                XCTAssertEqual(performance(recalculated)["targetAmount"] as? Int, 300_000)
+                XCTAssertEqual(performance(recalculated)["remainingAmount"] as? Int, 285_000)
             }
         }
 
@@ -507,7 +505,8 @@ final class Issue4BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
                     using: client
                 )
                 XCTAssertEqual(performance(persisted)["currentAmount"] as? Int, 15_000)
-                XCTAssertEqual(performance(persisted)["targetAmount"] as? Int, 350_000)
+                XCTAssertEqual(performance(persisted)["targetAmount"] as? Int, 300_000)
+                XCTAssertEqual(performance(persisted)["remainingAmount"] as? Int, 285_000)
 
                 try await review(
                     transactionID: try XCTUnwrap(transactionID.get()),
@@ -585,7 +584,7 @@ final class Issue4BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
                 XCTAssertTrue(body.contains("button.disabled = value < earliestMonth || value > currentMonth"))
                 XCTAssertTrue(body.contains("실적 제외 항목"))
                 XCTAssertTrue(body.contains("혜택 제외 항목"))
-                XCTAssertTrue(body.contains("월 실적 진행도"))
+                XCTAssertFalse(body.contains("월 실적 진행도"))
                 XCTAssertTrue(body.contains("benefit.minimumTransactionAmount"))
                 XCTAssertTrue(body.contains("benefit.exclusionNotes"))
                 XCTAssertFalse(body.contains("benefit.requiredPreviousMonthPerformanceAmount"))
@@ -597,7 +596,7 @@ final class Issue4BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
                 XCTAssertFalse(body.contains("월별 집계"))
                 XCTAssertFalse(body.contains("혜택 미확인"))
                 XCTAssertTrue(body.contains("name.className = 'cp-benefit-name'"))
-                XCTAssertTrue(body.contains("wrap.append(label, progress, terms)"))
+                XCTAssertTrue(body.contains("wrap.append(terms)"))
                 XCTAssertTrue(body.contains("조건: 건당 ${won(benefit.minimumTransactionAmount)} 이상"))
                 XCTAssertFalse(body.contains("row.append(checkbox, label, terms, wrap)"))
                 XCTAssertTrue(body.contains("row.append(checkbox, label, wrap)"))
@@ -762,20 +761,16 @@ final class Issue4BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
         }
     }
 
-    private func updateCard<Client>(
-        card: [String: Any],
-        targetAmount: Int,
+    private func qualifyExistingCardBenefits<Client>(
+        cardID: String,
         using client: Client
     ) async throws where Client: TestClientProtocol {
-        let cardID = try requiredString(card, key: "id")
         let payload: [String: Any] = [
-            "displayName": try requiredString(card, key: "displayName"),
-            "issuerCode": try requiredString(card, key: "issuerCode"),
-            "lastFour": try requiredString(card, key: "lastFour"),
-            "performanceTargetAmount": targetAmount
+            "performanceOffsetAmount": 300_000,
+            "benefitOffsets": []
         ]
         try await client.execute(
-            uri: "/api/v1/cards/\(cardID)",
+            uri: "/api/v1/cards/\(cardID)/monthly-offsets?month=2026-07",
             method: .put,
             headers: issue4Headers(login: allowedLogin, mutation: true),
             body: issue4ByteBuffer(try issue4JSONData(payload))
