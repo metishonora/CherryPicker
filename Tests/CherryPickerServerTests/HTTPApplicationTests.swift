@@ -185,6 +185,72 @@ final class HTTPApplicationTests: XCTestCase {
         }
     }
 
+    func testReceivedMessageIsAvailableOnlyOnAuthenticatedTransactionDetail() async throws {
+        let databaseURL = try temporaryDatabaseURL()
+        defer { removeDatabaseFiles(at: databaseURL) }
+        let store = try SQLiteEventStore(databaseURL: databaseURL)
+        let app = try makeApplication(store: store)
+        let allowedLogin = self.allowedLogin
+        let event = makeEvent(
+            eventID: UUID(uuidString: "00000000-0000-0000-0000-000000000107")!,
+            capturedAt: try makeDate("2026-08-11T12:46:56+09:00")
+        )
+        let result = try await store.ingest(event)
+        let transactionID = try XCTUnwrap(result.transactionID)
+        let detailURI = "/api/v1/transactions/\(transactionID.uuidString)"
+
+        try await app.test(.router) { client in
+            for login in [nil, "other-device@example.test"] {
+                try await client.execute(
+                    uri: detailURI,
+                    method: .get,
+                    headers: httpHeaders(login: login)
+                ) { response in
+                    XCTAssertEqual(response.status, .unauthorized)
+                    XCTAssertFalse(httpBodyString(response.body).contains(event.originalMessage))
+                }
+            }
+
+            try await client.execute(
+                uri: "/api/v1/transactions?scope=unreviewed",
+                method: .get,
+                headers: httpHeaders(login: allowedLogin)
+            ) { response in
+                XCTAssertEqual(response.status, .ok)
+                let body = httpBodyString(response.body)
+                XCTAssertFalse(body.contains("receivedMessage"))
+                XCTAssertFalse(body.contains(event.originalMessage))
+            }
+
+            try await client.execute(
+                uri: detailURI,
+                method: .get,
+                headers: httpHeaders(login: allowedLogin)
+            ) { response in
+                XCTAssertEqual(response.status, .ok)
+                let object = try XCTUnwrap(
+                    JSONSerialization.jsonObject(
+                        with: Data(response.body.readableBytesView)
+                    ) as? [String: Any]
+                )
+                XCTAssertEqual(object["receivedMessage"] as? String, event.originalMessage)
+                XCTAssertNil((object["transaction"] as? [String: Any])?["receivedMessage"])
+            }
+
+            try await client.execute(
+                uri: "/",
+                method: .get,
+                headers: httpHeaders(login: allowedLogin)
+            ) { response in
+                XCTAssertEqual(response.status, .ok)
+                let body = httpBodyString(response.body)
+                XCTAssertTrue(body.contains("detail-received-message"))
+                XCTAssertTrue(body.contains("data.receivedMessage"))
+                XCTAssertFalse(body.contains(event.originalMessage))
+            }
+        }
+    }
+
     func testRootRequiresIdentityAndRendersMinimalHTMLWithoutOriginalMessage() async throws {
         let databaseURL = try temporaryDatabaseURL()
         defer { removeDatabaseFiles(at: databaseURL) }

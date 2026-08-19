@@ -259,6 +259,18 @@ public struct TransactionResponse: Codable, Equatable, Sendable {
     }
 }
 
+/// Sensitive payload returned only by the authenticated single-transaction
+/// detail route. Collection, dashboard, and mutation responses stay redacted.
+public struct TransactionDetailResponse: Codable, Equatable, Sendable {
+    public let transaction: ManagedTransaction
+    public let receivedMessage: String
+
+    public init(transaction: ManagedTransaction, receivedMessage: String) {
+        self.transaction = transaction
+        self.receivedMessage = receivedMessage
+    }
+}
+
 public struct TransactionReviewInput: Codable, Equatable, Sendable {
     public let performance: PerformanceDecision?
     public let benefitIds: [UUID]

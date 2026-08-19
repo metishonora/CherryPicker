@@ -213,6 +213,14 @@ enum ProductWebPage {
             .cp-field-help, .cp-field-error { margin: 0; font-size: 13px; }
             .cp-field-help { color: var(--cp-muted); }
             .cp-field-error { color: var(--cp-danger); }
+            .cp-parse-details { margin-top: 20px; }
+            .cp-parse-details summary { cursor: pointer; font-weight: 700; }
+            .cp-received-message-label { margin: 18px 0 8px; font-weight: 700; }
+            .cp-received-message {
+              margin: 0; padding: 14px; border: 1px solid var(--cp-line); border-radius: 12px;
+              background: var(--cp-panel); color: var(--cp-text); font: inherit; font-size: 14px;
+              line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text;
+            }
             .cp-settings-section { margin-top: 34px; padding-top: 28px; border-top: 1px solid var(--cp-line); }
             .cp-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
             .cp-section-heading h2 { margin: 0; font-size: 20px; }
@@ -371,8 +379,21 @@ enum ProductWebPage {
                     </div>
                     <div class="cp-field">
                       <label for="setting-performance-offset" id="setting-performance-offset-label">실적 오프셋</label>
-                      <input id="setting-performance-offset" data-offset-input type="text" inputmode="text" autocomplete="off" aria-describedby="setting-performance-offset-error">
+                      <input id="setting-performance-offset" data-offset-input type="text" inputmode="text" autocomplete="off" aria-describedby="setting-performance-offset-help setting-performance-offset-error">
+                      <p class="cp-field-help" id="setting-performance-offset-help">이번 달 혜택 한도를 정할 때 직전 월 최종 실적에 더해집니다.</p>
                       <p class="cp-field-error" id="setting-performance-offset-error" hidden>원 단위 정수로 입력해주세요.</p>
+                    </div>
+                  </section>
+                  <section class="cp-settings-section" aria-labelledby="settings-current-performance-offset-title">
+                    <div class="cp-section-heading">
+                      <div><h2 id="settings-current-performance-offset-title">이번 달 실적 조정</h2></div>
+                      <span class="cp-period-badge" id="settings-current-performance-period"></span>
+                    </div>
+                    <div class="cp-field">
+                      <label for="setting-current-performance-offset" id="setting-current-performance-offset-label">실적 오프셋</label>
+                      <input id="setting-current-performance-offset" data-offset-input type="text" inputmode="text" autocomplete="off" aria-describedby="setting-current-performance-offset-help setting-current-performance-offset-error">
+                      <p class="cp-field-help" id="setting-current-performance-offset-help">이번 달 실적 합계와 다음 실적 구간 진행도에 더해집니다.</p>
+                      <p class="cp-field-error" id="setting-current-performance-offset-error" hidden>원 단위 정수로 입력해주세요.</p>
                     </div>
                   </section>
                   <section class="cp-settings-section" aria-labelledby="settings-benefit-offset-title">
@@ -425,7 +446,12 @@ enum ProductWebPage {
 
                 <div class="cp-section">
                   <div class="cp-field"><label for="detail-memo">메모</label><textarea id="detail-memo"></textarea></div>
-                  <details style="margin-top:20px"><summary>파싱 상태 보기</summary><p id="detail-parse-status" class="cp-status"></p></details>
+                  <details class="cp-parse-details">
+                    <summary>파싱 상태 보기</summary>
+                    <p id="detail-parse-status" class="cp-status"></p>
+                    <p class="cp-received-message-label">받은 문자 전체</p>
+                    <pre id="detail-received-message" class="cp-received-message"></pre>
+                  </details>
                   <div class="cp-actions"><button id="detail-cancel" class="cp-button" type="button">취소</button><button id="detail-save" class="cp-button cp-button-primary" type="button">저장하고 확인</button></div>
                 </div>
               </section>
@@ -769,8 +795,10 @@ enum ProductWebPage {
                 $('#setting-last-four').value = selected.lastFour;
                 const previousMonth = shiftedMonth(currentMonth, -1);
                 $('#settings-performance-period').textContent = monthLabel(previousMonth);
+                $('#settings-current-performance-period').textContent = monthLabel(currentMonth);
                 $('#settings-benefit-period').textContent = monthLabel(currentMonth);
                 $('#setting-performance-offset-label').textContent = `${Number(previousMonth.slice(5))}월 실적 오프셋`;
+                $('#setting-current-performance-offset-label').textContent = `${Number(currentMonth.slice(5))}월 실적 오프셋`;
                 const [previousData, currentData] = await Promise.all([
                   api(`/api/v1/cards/${state.selectedCardId}/monthly-offsets?month=${previousMonth}`),
                   api(`/api/v1/cards/${state.selectedCardId}/monthly-offsets?month=${currentMonth}`)
@@ -781,6 +809,9 @@ enum ProductWebPage {
                 const performanceInput = $('#setting-performance-offset');
                 performanceInput.value = String(previousData.monthlyOffsets.performanceOffsetAmount);
                 setOffsetInputError(performanceInput, false);
+                const currentPerformanceInput = $('#setting-current-performance-offset');
+                currentPerformanceInput.value = String(currentData.monthlyOffsets.performanceOffsetAmount);
+                setOffsetInputError(currentPerformanceInput, false);
 
                 const values = new Map(offsets.benefitOffsets.map(value => [value.benefitId, value.offsetAmount]));
                 const container = $('#settings-benefit-offsets');
@@ -858,6 +889,7 @@ enum ProductWebPage {
                 $('#detail-amount').textContent = won(transaction.amount); $('#detail-merchant').textContent = transaction.merchant || '확인 필요';
                 $('#detail-kind').textContent = kindLabel(transaction.kind); $('#detail-date').textContent = dateLabel(transaction.occurredAt);
                 $('#detail-parse-status').textContent = transaction.parseStatus === 'parsed' ? '문자를 정상적으로 분류했습니다.' : '문자 분류를 확인해야 합니다.';
+                $('#detail-received-message').textContent = data.receivedMessage;
                 $('#aggregation-excluded').checked = transaction.aggregationExcluded;
                 $('#performance-included').checked = transaction.performance === 'included'; $('#performance-excluded').checked = transaction.performance === 'excluded';
                 $('#detail-memo').value = transaction.memo || '';
@@ -925,6 +957,7 @@ enum ProductWebPage {
                 state.filter = button.dataset.filter; $$('.cp-filter button').forEach(value => value.setAttribute('aria-pressed', String(value === button))); await loadTransactions();
               }));
               prepareOffsetInput($('#setting-performance-offset'));
+              prepareOffsetInput($('#setting-current-performance-offset'));
               $('#settings-form').addEventListener('submit', async event => {
                 event.preventDefault();
                 const offsetInputs = $$('[data-offset-input]');
@@ -945,7 +978,7 @@ enum ProductWebPage {
                   const benefitOffsets = offsetInputs.filter(input => input.dataset.benefitId).map(input => ({ benefitId: input.dataset.benefitId, offsetAmount: offsetValues.get(input) }));
                   const previousMonth = shiftedMonth(currentMonth, -1);
                   await api(`/api/v1/cards/${state.selectedCardId}/monthly-offsets?month=${previousMonth}`, { method: 'PUT', body: JSON.stringify({ performanceOffsetAmount: offsetValues.get($('#setting-performance-offset')), benefitOffsets: state.settingsPreviousOffsets?.benefitOffsets || [] }) });
-                  await api(`/api/v1/cards/${state.selectedCardId}/monthly-offsets?month=${currentMonth}`, { method: 'PUT', body: JSON.stringify({ performanceOffsetAmount: state.settingsCurrentOffsets?.performanceOffsetAmount || 0, benefitOffsets }) });
+                  await api(`/api/v1/cards/${state.selectedCardId}/monthly-offsets?month=${currentMonth}`, { method: 'PUT', body: JSON.stringify({ performanceOffsetAmount: offsetValues.get($('#setting-current-performance-offset')), benefitOffsets }) });
                   state.cards = state.cards.map(value => value.id === data.card.id ? data.card : value); await loadCards(); $('#card-selector').value = state.selectedCardId; clearError(); toast('카드 설정을 저장했습니다');
                 } catch (error) {
                   showError(error);

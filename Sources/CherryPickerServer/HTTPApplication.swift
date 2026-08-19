@@ -282,12 +282,12 @@ public struct CherryPickerHTTPApplication {
                 return Self.badRequestResponse()
             }
             do {
-                guard let transaction = try await store.managedTransaction(id: id) else {
+                guard let detail = try await store.managedTransactionDetail(id: id) else {
                     return Self.notFoundResponse()
                 }
                 return Self.jsonResponse(
                     status: .ok,
-                    data: try codec.encode(TransactionResponse(transaction: transaction))
+                    data: try codec.encode(detail)
                 )
             } catch {
                 return Self.internalErrorResponse()

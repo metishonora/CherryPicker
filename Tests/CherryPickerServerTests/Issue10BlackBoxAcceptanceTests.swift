@@ -140,10 +140,17 @@ final class Issue10BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
                     XCTAssertEqual(response.status, .ok)
                     let html = String(decoding: response.body.readableBytesView, as: UTF8.self)
                     XCTAssertTrue(html.contains("직전 월 실적 조정"))
+                    XCTAssertTrue(html.contains("이번 달 실적 조정"))
                     XCTAssertTrue(html.contains("이번 달 혜택 조정"))
                     XCTAssertTrue(html.contains("setting-performance-offset"))
+                    XCTAssertTrue(html.contains("setting-current-performance-offset"))
                     XCTAssertTrue(html.contains("settings-benefit-offsets"))
                     XCTAssertTrue(html.contains("/monthly-offsets?month=${currentMonth}"))
+                    XCTAssertTrue(
+                        html.contains(
+                            "performanceOffsetAmount: offsetValues.get($('#setting-current-performance-offset'))"
+                        )
+                    )
                     XCTAssertFalse(html.contains("originalMessage"))
                 }
             }

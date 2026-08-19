@@ -652,6 +652,30 @@ public actor SQLiteEventStore {
         return try decodeManagedTransaction(from: statement)
     }
 
+    /// Reads the captured message only for the authenticated transaction-detail
+    /// boundary. General transaction queries deliberately omit this column.
+    public func managedTransactionDetail(id: UUID) throws -> TransactionDetailResponse? {
+        guard let transaction = try managedTransaction(id: id) else { return nil }
+        let statement = try prepare("""
+            SELECT original_message
+            FROM canonical_transactions
+            WHERE id = ?
+            LIMIT 1
+            """)
+        defer { sqlite3_finalize(statement) }
+        try bindText(id.uuidString, to: statement, at: 1)
+        guard
+            sqlite3_step(statement) == SQLITE_ROW,
+            let receivedMessage = columnString(statement, at: 0)
+        else {
+            throw SQLiteEventStoreError.invalidStoredValue("transaction detail message")
+        }
+        return TransactionDetailResponse(
+            transaction: transaction,
+            receivedMessage: receivedMessage
+        )
+    }
+
     public func reviewTransaction(
         id: UUID,
         request: TransactionUpdateRequest
