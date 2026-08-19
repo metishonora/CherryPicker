@@ -824,13 +824,31 @@ public actor SQLiteEventStore {
             resolvedLimit = benefitLimit
         }
 
+        var integratedReceivedAmounts: [UUID: Int] = [:]
+        if card.benefitLimitPolicy.type == .integrated {
+            var remainingReceivedAmount = resolvedLimit.receivedAmount ?? 0
+            for benefit in card.benefits {
+                let calculationAmount = calculation.benefits
+                    .first { $0.id == benefit.id }?
+                    .calculationAmount ?? 0
+                let receivedAmount = min(
+                    remainingReceivedAmount,
+                    max(0, calculationAmount)
+                )
+                integratedReceivedAmounts[benefit.id] = receivedAmount
+                remainingReceivedAmount -= receivedAmount
+            }
+        }
+
         let progress = card.benefits.map { benefit in
             let value = calculation.benefits.first { $0.id == benefit.id }
             return BenefitProgress(
                 id: benefit.id,
                 label: benefit.label,
                 calculationAmount: value?.calculationAmount ?? 0,
-                receivedAmount: value?.receivedAmount ?? 0,
+                receivedAmount: integratedReceivedAmounts[benefit.id]
+                    ?? value?.receivedAmount
+                    ?? 0,
                 maximumAmount: effectiveBenefits.first { $0.id == benefit.id }?.maximumAmount
             )
         }

@@ -379,6 +379,12 @@ final class Issue12AggregationBlackBoxAcceptanceTests: XCTestCase, @unchecked Se
                 },
                 40_000
             )
+            let displayedBenefitAmounts = benefitRows.compactMap {
+                $0["receivedAmount"] as? Int
+            }
+            XCTAssertEqual(displayedBenefitAmounts.count, benefitRows.count)
+            XCTAssertEqual(displayedBenefitAmounts.reduce(0, +), 30_000)
+            XCTAssertTrue(displayedBenefitAmounts.allSatisfy { $0 >= 0 && $0 <= 30_000 })
             XCTAssertTrue(benefitRows.allSatisfy { $0["maximumAmount"] == nil })
             XCTAssertEqual(
                 try requiredObject(august, key: "performance")["currentAmount"] as? Int,
@@ -554,6 +560,7 @@ final class Issue12AggregationBlackBoxAcceptanceTests: XCTestCase, @unchecked Se
                 XCTAssertTrue(html.contains("function integratedReviewBenefitProgress"))
                 XCTAssertTrue(html.contains("dashboard.benefitLimit.maximumAmount || 0"))
                 XCTAssertTrue(html.contains("integratedReviewBenefitProgress(dashboard, previewCalculations)"))
+                XCTAssertTrue(html.contains("integrated ? won(value.receivedAmount)"))
                 XCTAssertTrue(html.contains("혜택별 받은 금액"))
                 XCTAssertTrue(html.contains("cp-benefit-summary"))
                 XCTAssertTrue(html.contains("data-card-theme"))

@@ -758,7 +758,7 @@ enum ProductWebPage {
                   const wrap = document.createElement('div'); wrap.className = 'cp-benefit';
                   const label = document.createElement('div'); label.className = 'cp-metric-label';
                   const name = document.createElement('span'); name.className = 'cp-benefit-name'; name.textContent = value.label;
-                  const amount = document.createElement('strong'); amount.textContent = integrated ? won(value.calculationAmount) : `${won(value.receivedAmount)} / ${won(value.maximumAmount)}`;
+                  const amount = document.createElement('strong'); amount.textContent = integrated ? won(value.receivedAmount) : `${won(value.receivedAmount)} / ${won(value.maximumAmount)}`;
                   label.append(name, amount);
                   const definition = selected.benefits.find(benefit => benefit.id === value.id);
                   const terms = document.createElement('p'); terms.className = 'cp-benefit-terms'; terms.textContent = definition ? benefitTerms(definition) : '';
