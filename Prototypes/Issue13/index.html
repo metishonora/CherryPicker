@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Issue 13 · 후보 카드 시뮬레이터 프로토타입</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="prototype-layout">
+    <aside class="review-tools" aria-label="프로토타입 검토 도구">
+      <div class="review-tools-head">
+        <p>가칭 Issue #13</p>
+        <h2>카드 시뮬레이터</h2>
+        <span>이 영역은 제품에 포함되지 않습니다.</span>
+      </div>
+
+      <div class="review-field">
+        <label for="scenario">시나리오</label>
+        <select id="scenario">
+          <option value="partial">기본 · 거래 일부 선택</option>
+          <option value="empty">선택 0건</option>
+          <option value="exhausted">월 한도 소진</option>
+          <option value="ambiguous">애매한 거래 포함</option>
+        </select>
+      </div>
+
+      <div class="review-field">
+        <label for="review-screen">화면 강제 전환</label>
+        <select id="review-screen">
+          <option value="policy">카드 조건</option>
+          <option value="questions">확인할 거래</option>
+          <option value="transactions">거래 선택</option>
+        </select>
+      </div>
+
+      <p class="review-note">제품 단계는 순서대로 열립니다. 이 선택기만 잠긴 화면을 강제로 보여줍니다.</p>
+    </aside>
+
+    <div class="preview-stage">
+      <div class="product-shell">
+        <header class="product-header">
+          <div class="brand">
+            <strong>CherryPicker</strong>
+            <span>카드 시뮬레이션</span>
+          </div>
+          <span class="prototype-badge">가상 적용</span>
+        </header>
+
+        <nav class="simulator-steps" aria-label="카드 시뮬레이션 단계">
+          <button type="button" data-product-screen="policy" aria-current="step"><span>1</span>카드 조건</button>
+          <button type="button" data-product-screen="questions" disabled><span>2</span>확인할 거래</button>
+          <button type="button" data-product-screen="transactions" disabled><span>3</span>거래 선택</button>
+        </nav>
+
+        <main class="product-main">
+          <section id="policy-screen" class="product-screen" aria-labelledby="policy-page-title">
+            <header class="screen-heading card-heading">
+              <div>
+                <p>체리 라이프 카드 · 합성</p>
+                <h1 id="policy-page-title" tabindex="-1">카드 조건</h1>
+              </div>
+              <span id="policy-confirmation" class="state-badge is-pending">확인 전</span>
+            </header>
+
+            <dl class="key-facts">
+              <div><dt>연회비</dt><dd>12,000원</dd></div>
+              <div><dt>분석월</dt><dd>2026.07</dd></div>
+              <div><dt>거래</dt><dd>승인 9건<small>취소 2건 제외</small></dd></div>
+            </dl>
+
+            <section class="policy-section" aria-labelledby="tier-title">
+              <h2 id="tier-title">전월 실적 한도</h2>
+              <table>
+                <thead><tr><th scope="col">전월 실적</th><th scope="col">통합 월 한도</th></tr></thead>
+                <tbody>
+                  <tr><td>30만원 미만</td><td>0원</td></tr>
+                  <tr><td>30만원 이상</td><td>15,000원</td></tr>
+                  <tr><td>60만원 이상</td><td>30,000원</td></tr>
+                </tbody>
+              </table>
+              <p class="grace-result"><strong>신규 발급 유예</strong><span>전월 실적 없이 한도 15,000원</span></p>
+            </section>
+
+            <section class="policy-section" aria-labelledby="benefit-title">
+              <h2 id="benefit-title">혜택</h2>
+              <ul class="benefit-policy-list">
+                <li><div><strong>간편결제 10%</strong><span>체리페이 · 건당 1만원 이상</span></div></li>
+                <li><div><strong>영상 스트리밍 50%</strong><span>공식 홈페이지 월 정기결제</span></div></li>
+                <li><div><strong>생활요금 자동납부 5%</strong><span>이동통신·전기요금 자동납부</span></div></li>
+              </ul>
+              <p class="policy-difference">실적 제외와 혜택 제외는 별도입니다. 전기요금은 실적 제외·혜택 대상, 학원비는 실적 인정·혜택 제외로 분류했습니다.</p>
+            </section>
+
+            <details class="policy-details">
+              <summary>출처 보기</summary>
+              <dl>
+                <div><dt>출처</dt><dd>체리 라이프 카드 상품설명서 v1.0 (합성)</dd></div>
+                <div><dt>기준일</dt><dd>2026.07.01</dd></div>
+                <div><dt>연회비 월 환산</dt><dd>1,000원</dd></div>
+              </dl>
+            </details>
+
+            <details class="policy-details">
+              <summary>제외 정책 보기</summary>
+              <ul>
+                <li>관리비·전기요금·상품권 구매는 실적 제외</li>
+                <li>관리비·교육 업종·상품권 구매는 혜택 제외</li>
+                <li>세 혜택은 같은 월 한도를 거래일 순으로 사용</li>
+              </ul>
+            </details>
+
+            <p class="preservation-note"><strong>기존 데이터 유지</strong> · 거래 원본, 기존 판정과 사용자 분류는 바뀌지 않습니다.</p>
+            <button id="confirm-policy" class="primary-button full-button" type="button">카드 조건 확인</button>
+          </section>
+
+          <section id="questions-screen" class="product-screen" aria-labelledby="questions-page-title" hidden>
+            <header class="screen-heading">
+              <p id="classification-summary">혜택 대상 5 · 혜택 없음 3 · 확인 필요 1</p>
+              <h1 id="questions-page-title" tabindex="-1">확인할 거래</h1>
+            </header>
+
+            <section class="question-transaction" aria-labelledby="question-merchant">
+              <div>
+                <span>2026.07.13 · 승인</span>
+                <h2 id="question-merchant">오픈마켓 주문</h2>
+              </div>
+              <strong>95,000원</strong>
+            </section>
+
+            <form id="question-form">
+              <fieldset class="question-fieldset">
+                <legend>체리페이로 결제했나요?</legend>
+                <p>결제수단에 따라 간편결제 할인 9,500원 여부가 달라집니다.</p>
+                <div class="question-options">
+                  <label><input id="question-answer-yes" type="radio" name="question-answer" value="yes"><span>네, 체리페이</span></label>
+                  <label><input id="question-answer-no" type="radio" name="question-answer" value="no"><span>아니요, 카드 직접 결제</span></label>
+                </div>
+              </fieldset>
+            </form>
+
+            <p id="question-result" class="question-result is-pending"><strong>미응답</strong><span>0원–최대 9,500원 범위로 계산합니다.</span></p>
+            <button id="confirm-questions" class="primary-button full-button" type="button">범위로 거래 선택</button>
+          </section>
+
+          <section id="transactions-screen" class="product-screen" aria-labelledby="transactions-page-title" hidden>
+            <header class="screen-heading">
+              <p>체리 라이프 카드 · 2026.07</p>
+              <h1 id="transactions-page-title" tabindex="-1">7월 거래 선택</h1>
+            </header>
+
+            <div class="assumption-field">
+              <label for="performance-assumption">전월 실적 가정</label>
+              <select id="performance-assumption">
+                <option value="missed">실적 미달 · 한도 0원</option>
+                <option value="tier300" selected>30만원 달성 · 한도 15,000원</option>
+                <option value="tier600">60만원 달성 · 한도 30,000원</option>
+                <option value="grace">신규 발급 유예 · 한도 15,000원</option>
+              </select>
+            </div>
+
+            <section class="sticky-summary" aria-labelledby="summary-title">
+              <h2 id="summary-title" class="sr-only">선택 결과</h2>
+              <div class="summary-values">
+                <div><span>예상 혜택</span><strong id="benefit-total">0원</strong></div>
+                <div><span>피킹률</span><strong id="picking-rate">—</strong></div>
+                <div><span>선택액</span><strong id="selected-total">0원</strong></div>
+              </div>
+              <p id="picking-rate-help">피킹률은 선택한 결제액 전체를 분모로 계산합니다.</p>
+              <p id="range-note" class="range-note" hidden>확인 전 거래가 있어 최소–최대 범위로 표시합니다.</p>
+            </section>
+
+            <details class="calculation-summary">
+              <summary>계산 상세</summary>
+              <div class="calculation-summary-body">
+                <dl>
+                  <div><dt>선택 거래</dt><dd id="selected-count">0건</dd></div>
+                  <div><dt>실적 인정액</dt><dd id="performance-total">0원</dd></div>
+                  <div><dt>다음 달 전망</dt><dd id="performance-outlook">30만원 구간까지 300,000원 남음</dd></div>
+                  <div><dt>한도 사용</dt><dd id="limit-usage">0원 / 15,000원</dd></div>
+                  <div><dt>남은 한도</dt><dd id="limit-remaining">15,000원</dd></div>
+                </dl>
+                <div id="limit-progress" class="progress" role="progressbar" aria-label="통합 월 혜택한도 사용률" aria-valuemin="0" aria-valuemax="15000" aria-valuenow="0"><span></span></div>
+                <p class="annual-fee-note"><span>연회비 월 환산 1,000원 반영</span><strong id="net-picking-rate">—</strong></p>
+              </div>
+            </details>
+
+            <section class="transaction-section" aria-labelledby="transaction-list-title">
+              <div class="transaction-head">
+                <div><h2 id="transaction-list-title">거래</h2><p>승인 9건 · 취소 2건 제외</p></div>
+                <div class="selection-actions">
+                  <button id="select-all" type="button">모두 선택</button>
+                  <button id="clear-all" type="button">모두 해제</button>
+                </div>
+              </div>
+              <ol id="transaction-list" class="transaction-list"></ol>
+            </section>
+          </section>
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <p id="update-announcement" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+  <script src="app.js"></script>
+</body>
+</html>

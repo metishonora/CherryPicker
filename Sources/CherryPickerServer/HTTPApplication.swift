@@ -20,6 +20,7 @@ public struct CherryPickerHTTPApplication {
         port: Int = 8765
     ) throws {
         let ingestion = IngestionService(store: store, authorizer: authorizer)
+        let candidateSimulations = CandidateSimulationService(store: store, codec: codec)
         let router = Router()
 
         router.get("/healthz") { _, _ -> EditedResponse<String> in
@@ -53,6 +54,115 @@ public struct CherryPickerHTTPApplication {
                     return Self.internalErrorResponse()
                 }
                 return Self.badRequestResponse()
+            }
+        }
+
+        router.get("/api/v1/candidate-simulations/template") {
+            request, _ async -> EditedResponse<String> in
+            guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
+                return Self.unauthorizedResponse()
+            }
+            guard let identifier = request.uri.queryParameters["month"].map(String.init) else {
+                return Self.badRequestResponse()
+            }
+            do {
+                let month = try DashboardMonth(identifier: identifier)
+                return Self.jsonResponse(
+                    status: .ok,
+                    data: try codec.encode(
+                        try await candidateSimulations.template(month: month)
+                    )
+                )
+            } catch DashboardMonthError.invalidIdentifier,
+                    DashboardMonthError.unresolvedInterval {
+                return Self.badRequestResponse()
+            } catch {
+                return Self.internalErrorResponse()
+            }
+        }
+
+        router.get("/api/v1/candidate-simulations/current") {
+            request, _ async -> EditedResponse<String> in
+            guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
+                return Self.unauthorizedResponse()
+            }
+            do {
+                return Self.jsonResponse(
+                    status: .ok,
+                    data: try codec.encode(try await candidateSimulations.current())
+                )
+            } catch CandidateSimulationServiceError.notFound {
+                return Self.notFoundResponse()
+            } catch {
+                return Self.internalErrorResponse()
+            }
+        }
+
+        router.put("/api/v1/candidate-simulations/current") {
+            request, _ async -> EditedResponse<String> in
+            guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
+                return Self.unauthorizedResponse()
+            }
+            guard Self.hasValidCSRFHeader(request) else {
+                return Self.forbiddenResponse()
+            }
+            do {
+                let body = try await request.body.collect(upTo: Self.maxBatchBodyBytes)
+                let update = try codec.decode(
+                    CandidateSimulationPutRequest.self,
+                    from: Data(body.readableBytesView)
+                )
+                return Self.jsonResponse(
+                    status: .ok,
+                    data: try codec.encode(
+                        try await candidateSimulations.replace(request: update)
+                    )
+                )
+            } catch CandidateSimulationServiceError.invalidInput,
+                    ManagementStoreError.invalidInput,
+                    DashboardMonthError.invalidIdentifier,
+                    DashboardMonthError.unresolvedInterval {
+                return Self.badRequestResponse()
+            } catch is CandidateCardSimulationError {
+                return Self.badRequestResponse()
+            } catch is DecodingError {
+                return Self.badRequestResponse()
+            } catch {
+                return Self.internalErrorResponse()
+            }
+        }
+
+        router.patch("/api/v1/candidate-simulations/current") {
+            request, _ async -> EditedResponse<String> in
+            guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
+                return Self.unauthorizedResponse()
+            }
+            guard Self.hasValidCSRFHeader(request) else {
+                return Self.forbiddenResponse()
+            }
+            do {
+                let body = try await request.body.collect(upTo: Self.maxBatchBodyBytes)
+                let update = try codec.decode(
+                    CandidateSimulationPatchRequest.self,
+                    from: Data(body.readableBytesView)
+                )
+                return Self.jsonResponse(
+                    status: .ok,
+                    data: try codec.encode(
+                        try await candidateSimulations.patch(request: update)
+                    )
+                )
+            } catch CandidateSimulationServiceError.notFound {
+                return Self.notFoundResponse()
+            } catch CandidateSimulationServiceError.invalidInput,
+                    ManagementStoreError.invalidInput {
+                return Self.badRequestResponse()
+            } catch is CandidateCardSimulationError {
+                return Self.badRequestResponse()
+            } catch is DecodingError {
+                return Self.badRequestResponse()
+            } catch {
+                return Self.internalErrorResponse()
             }
         }
 

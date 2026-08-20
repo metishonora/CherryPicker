@@ -1260,6 +1260,31 @@ public actor SQLiteEventStore {
             )
             """, database: database)
         try execute("""
+            CREATE TABLE IF NOT EXISTS candidate_card_policy_snapshots (
+                id TEXT PRIMARY KEY NOT NULL,
+                schema_version INTEGER NOT NULL,
+                policy_json TEXT NOT NULL,
+                created_at REAL NOT NULL
+            )
+            """, database: database)
+        try execute("""
+            CREATE TABLE IF NOT EXISTS candidate_card_simulation_drafts (
+                id TEXT PRIMARY KEY NOT NULL,
+                policy_snapshot_id TEXT NOT NULL,
+                analysis_month TEXT NOT NULL,
+                calculator_version TEXT NOT NULL,
+                input_json TEXT NOT NULL,
+                state_json TEXT NOT NULL,
+                excluded_cancellation_count INTEGER NOT NULL DEFAULT 0,
+                excluded_other_count INTEGER NOT NULL DEFAULT 0,
+                active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0, 1)),
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL,
+                FOREIGN KEY(policy_snapshot_id)
+                    REFERENCES candidate_card_policy_snapshots(id)
+            )
+            """, database: database)
+        try execute("""
             INSERT OR IGNORE INTO cards (
                 id, card_type_code, display_name, issuer_code, last_four,
                 performance_target_amount, created_at
@@ -1315,6 +1340,11 @@ public actor SQLiteEventStore {
         try execute("""
             CREATE INDEX IF NOT EXISTS idx_cards_card_type_code
             ON cards(card_type_code)
+            """, database: database)
+        try execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_candidate_simulation_one_active
+            ON candidate_card_simulation_drafts(active)
+            WHERE active = 1
             """, database: database)
         try execute("PRAGMA optimize", database: database)
     }
@@ -1927,6 +1957,13 @@ public actor SQLiteEventStore {
             }
         }
         return "database operation failed"
+    }
+
+    /// Narrow SQLite boundary used by candidate-simulation persistence in its
+    /// dedicated extension file. Keeping the connection wrapper private avoids
+    /// exposing the rest of the event store's implementation details.
+    var candidateSimulationDatabase: OpaquePointer {
+        connection.pointer
     }
 }
 

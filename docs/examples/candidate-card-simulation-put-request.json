@@ -1,0 +1,126 @@
+{
+  "analysisMonth": "2026-07",
+  "classifications": [
+    {
+      "alternatives": [
+        {
+          "benefitIDs": [
+            "online-pay"
+          ],
+          "benefitReason": "온라인 간편결제 조건을 충족합니다.",
+          "id": "known",
+          "performance": "included",
+          "performanceReason": "공통 실적 제외 항목에 해당하지 않습니다."
+        }
+      ],
+      "transactionID": "00000000-0000-0000-0000-000000000101"
+    },
+    {
+      "alternatives": [
+        {
+          "answerLabel": "예",
+          "benefitIDs": [
+            "online-pay"
+          ],
+          "benefitReason": "간편결제 이용 시 온라인 혜택 대상입니다.",
+          "id": "wallet",
+          "performance": "included",
+          "performanceReason": "공통 실적 제외 항목에 해당하지 않습니다."
+        },
+        {
+          "answerLabel": "아니요",
+          "benefitIDs": [],
+          "benefitReason": "일반 카드 결제는 온라인 혜택 대상이 아닙니다.",
+          "id": "direct",
+          "performance": "included",
+          "performanceReason": "공통 실적 제외 항목에 해당하지 않습니다."
+        }
+      ],
+      "question": "간편결제로 결제했나요?",
+      "transactionID": "00000000-0000-0000-0000-000000000102"
+    }
+  ],
+  "defaultPerformanceAssumptionId": "tier-300k",
+  "policy": {
+    "annualFeeAmount": 12000,
+    "benefitExclusions": [
+      "무이자할부",
+      "상품권 구매"
+    ],
+    "benefits": [
+      {
+        "conditionSummary": "온라인 가맹점에서 간편결제로 1만원 이상 결제 시 10% 할인",
+        "exclusionNotes": [
+          "일반 카드번호 직접 결제 제외"
+        ],
+        "id": "online-pay",
+        "label": "온라인 간편결제 10%",
+        "limitGroupIDs": [
+          "integrated"
+        ],
+        "minimumTransactionAmount": 10000,
+        "priority": 0,
+        "rateBasisPoints": 1000,
+        "rounding": {
+          "direction": "floor",
+          "unit": 1
+        }
+      }
+    ],
+    "cardName": "합성 데일리 카드",
+    "issuerName": "합성 카드사",
+    "limitGroups": [
+      {
+        "id": "integrated",
+        "label": "통합 할인 한도"
+      }
+    ],
+    "performanceAssumptions": [
+      {
+        "id": "below",
+        "isGrace": false,
+        "label": "30만원 미만",
+        "limitGroupMaximumAmounts": {
+          "integrated": 0
+        },
+        "previousMonthAmount": 299999
+      },
+      {
+        "id": "tier-300k",
+        "isGrace": false,
+        "label": "30만원 이상",
+        "limitGroupMaximumAmounts": {
+          "integrated": 15000
+        },
+        "previousMonthAmount": 300000
+      },
+      {
+        "id": "new-card-grace",
+        "isGrace": true,
+        "label": "신규 발급 유예",
+        "limitGroupMaximumAmounts": {
+          "integrated": 15000
+        },
+        "previousMonthAmount": null
+      }
+    ],
+    "performanceExclusions": [
+      "세금",
+      "상품권 구매"
+    ],
+    "performanceThresholdAmounts": [
+      300000
+    ],
+    "productIdentifier": "synthetic-daily-2026",
+    "schemaVersion": 1,
+    "snapshotID": "00000000-0000-0000-0000-000000000900",
+    "source": {
+      "effectiveDate": "2026-07-01T00:00:00Z",
+      "name": "합성 상품 설명서",
+      "reference": "fixture://candidate-card/synthetic-daily",
+      "structuredAt": "2026-08-20T00:00:00Z"
+    },
+    "stacking": "highestPriorityOnly",
+    "unsupportedPolicyConditions": []
+  }
+}

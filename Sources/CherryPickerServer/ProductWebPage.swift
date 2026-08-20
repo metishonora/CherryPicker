@@ -269,6 +269,7 @@ enum ProductWebPage {
               .cp-actions { grid-template-columns: 1fr 1.25fr; }
             }
             @media (prefers-reduced-motion: reduce) { .cp-progress span { transition: none; } }
+            \#(CandidateCardSimulationWeb.styles)
           </style>
         </head>
         <body>
@@ -281,9 +282,10 @@ enum ProductWebPage {
             </header>
             <nav class="cp-nav" aria-label="주요 메뉴">
               <button type="button" data-view="inbox" aria-current="page">미확인 거래</button>
-              <button type="button" data-view="dashboard" hidden>대시보드</button>
-              <button type="button" data-view="transactions" hidden>거래</button>
-              <button type="button" data-view="settings" hidden>카드 설정</button>
+              <button type="button" data-view="simulation">카드 시뮬레이션</button>
+              <button type="button" data-view="dashboard" data-card-scoped hidden>대시보드</button>
+              <button type="button" data-view="transactions" data-card-scoped hidden>거래</button>
+              <button type="button" data-view="settings" data-card-scoped hidden>카드 설정</button>
             </nav>
             <main class="cp-main">
               <section id="view-inbox">
@@ -291,6 +293,8 @@ enum ProductWebPage {
                 <div id="inbox-list" class="cp-list"></div>
                 <p id="inbox-empty" class="cp-empty" hidden>확인할 거래가 없습니다.</p>
               </section>
+
+              \#(CandidateCardSimulationWeb.body)
 
               <section id="view-dashboard" hidden>
                 <div class="cp-heading"><h1 id="dashboard-title">카드 대시보드</h1><p id="dashboard-meta"></p></div>
@@ -603,9 +607,7 @@ enum ProductWebPage {
               }
 
               function setCardNavigationVisible(visible) {
-                $$('.cp-nav button').forEach(button => {
-                  if (button.dataset.view !== 'inbox') button.hidden = !visible;
-                });
+                $$('[data-card-scoped]').forEach(button => { button.hidden = !visible; });
               }
 
               function applyCardTheme() {
@@ -618,7 +620,7 @@ enum ProductWebPage {
               async function showView(view) {
                 clearError();
                 closeMonthPickers();
-                if (view === 'inbox') {
+                if (view === 'inbox' || view === 'simulation') {
                   state.selectedCardId = null;
                   $('#card-selector').value = '';
                   setCardNavigationVisible(false);
@@ -627,9 +629,10 @@ enum ProductWebPage {
                 state.view = view;
                 $$('[id^="view-"]').forEach(section => { section.hidden = section.id !== `view-${view}`; });
                 setCurrentTab(view === 'detail' ? state.returnView : view);
-                const labels = { inbox: '미확인 거래', dashboard: '대시보드', transactions: '거래', settings: '카드 설정', detail: '거래 검토' };
+                const labels = { inbox: '미확인 거래', simulation: '카드 시뮬레이션', dashboard: '대시보드', transactions: '거래', settings: '카드 설정', detail: '거래 검토' };
                 $('#context-label').textContent = labels[view];
                 if (view === 'inbox') await loadInbox();
+                if (view === 'simulation') await loadCandidateCardSimulation();
                 if (view === 'dashboard') await loadDashboard();
                 if (view === 'transactions') await loadTransactions();
                 if (view === 'settings') await loadSettings();
@@ -962,6 +965,8 @@ enum ProductWebPage {
                 await api(`/api/v1/transactions/${transaction.id}`, { method: 'PATCH', body: JSON.stringify({ review: { performance, benefitIds, memo: $('#detail-memo').value }, aggregationExcluded }) });
                 toast('저장했습니다'); await showView(state.returnView);
               }
+
+              \#(CandidateCardSimulationWeb.script)
 
               $$('.cp-nav button').forEach(button => button.addEventListener('click', () => {
                 if (button.dataset.view === 'inbox') { state.selectedCardId = null; $('#card-selector').value = ''; setCardNavigationVisible(false); }
