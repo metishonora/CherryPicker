@@ -10,6 +10,7 @@
 - Follow `docs/PRODUCT_ARCHITECTURE.md` and the accepted ADRs. Treat feature-policy decisions left open there as issue-level decisions; do not invent them during implementation.
 - Keep the active product boundary in the Swift package: Swift 6, Hummingbird 2, SQLite, `CherryPickerCore`, `CherryPickerServer`, and `CherryPickerLocalServer` serving the local web UI and HTTP API.
 - Treat the native iOS prototype and SwiftData as retired legacy evidence, not as current product constraints or migration sources. The Swift/Hummingbird local web implementation and its operations documentation are the current product path.
+- Apply the global concise-copy rule to dashboards, transaction review, settings, and prototypes representing those screens. Preserve domain explanations when labels and values alone do not make the meaning or consequence clear. Approved prototypes and product terminology take precedence.
 
 ## Prototype workflow
 
