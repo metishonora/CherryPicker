@@ -440,6 +440,29 @@ public struct CherryPickerHTTPApplication {
             }
         }
 
+        router.delete("/api/v1/transactions/:id") { request, context async -> EditedResponse<String> in
+            guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
+                return Self.unauthorizedResponse()
+            }
+            guard Self.hasValidCSRFHeader(request) else {
+                return Self.forbiddenResponse()
+            }
+            guard let id = context.parameters.get("id", as: UUID.self) else {
+                return Self.badRequestResponse()
+            }
+            do {
+                guard try await store.deleteManagedTransaction(id: id) else {
+                    return Self.notFoundResponse()
+                }
+                return Self.jsonResponse(
+                    status: .ok,
+                    data: Data(#"{"deleted":true}"#.utf8)
+                )
+            } catch {
+                return Self.internalErrorResponse()
+            }
+        }
+
         router.get("/") { request, _ async -> EditedResponse<String> in
             guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
                 return Self.unauthorizedResponse()

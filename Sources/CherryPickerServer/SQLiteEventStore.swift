@@ -676,6 +676,38 @@ public actor SQLiteEventStore {
         )
     }
 
+    /// Deletes the canonical transaction together with every receipt that can
+    /// lead back to it. Transaction card, review, and benefit rows cascade from
+    /// the canonical row.
+    public func deleteManagedTransaction(id: UUID) throws -> Bool {
+        try beginTransaction()
+        do {
+            let receiptStatement = try prepare(
+                "DELETE FROM event_receipts WHERE transaction_id = ?"
+            )
+            defer { sqlite3_finalize(receiptStatement) }
+            try bindText(id.uuidString, to: receiptStatement, at: 1)
+            guard sqlite3_step(receiptStatement) == SQLITE_DONE else {
+                throw SQLiteEventStoreError.statement(lastSQLiteMessage())
+            }
+
+            let transactionStatement = try prepare(
+                "DELETE FROM canonical_transactions WHERE id = ?"
+            )
+            defer { sqlite3_finalize(transactionStatement) }
+            try bindText(id.uuidString, to: transactionStatement, at: 1)
+            guard sqlite3_step(transactionStatement) == SQLITE_DONE else {
+                throw SQLiteEventStoreError.statement(lastSQLiteMessage())
+            }
+            let deleted = sqlite3_changes(connection.pointer) == 1
+            try commitTransaction()
+            return deleted
+        } catch {
+            rollbackTransaction()
+            throw error
+        }
+    }
+
     public func reviewTransaction(
         id: UUID,
         request: TransactionUpdateRequest
