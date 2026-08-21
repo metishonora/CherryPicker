@@ -206,7 +206,7 @@ public struct MGPlusSHanaCardDefinition: CardTypeDefining {
     public let messageIdentification = CardMessageIdentificationRules(
         senderIdentifiers: ["1800-1111"],
         cardBodyMarkers: ["MG+하나"],
-        transactionBodyMarkers: ["승인"]
+        transactionBodyMarkers: ["승인", "취소"]
     )
     public let legacyMonthlyPerformanceTargetAmount = 300_000
     public let performanceThresholdAmounts = [300_000, 600_000, 1_000_000]
@@ -290,7 +290,8 @@ public struct MGPlusSHanaCardDefinition: CardTypeDefining {
 
     public func identifies(messageBody: String) -> Bool {
         let compactBody = messageBody.filter { !$0.isWhitespace }
-        return compactBody.contains("MG+하나") && compactBody.contains("승인")
+        return compactBody.contains("MG+하나")
+            && (compactBody.contains("승인") || compactBody.contains("취소"))
     }
 
     public func parse(_ originalMessage: String) -> ParseResult {

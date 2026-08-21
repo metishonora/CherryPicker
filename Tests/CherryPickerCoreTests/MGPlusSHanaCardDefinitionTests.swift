@@ -10,6 +10,10 @@ final class MGPlusSHanaCardDefinitionTests: XCTestCase {
         XCTAssertEqual(definition.performanceThresholdAmounts, [300_000, 600_000, 1_000_000])
         XCTAssertEqual(definition.messageIdentification.senderIdentifiers, ["1800-1111"])
         XCTAssertEqual(
+            definition.messageIdentification.transactionBodyMarkers,
+            ["승인", "취소"]
+        )
+        XCTAssertEqual(
             MGTheBetterCheckCardDefinition().messageIdentification.senderIdentifiers,
             ["1599-9000"]
         )
@@ -17,6 +21,7 @@ final class MGPlusSHanaCardDefinitionTests: XCTestCase {
 
     func testDefinitionIdentifiesOnlyMGPlusBodyAmongKnownApprovalFormats() {
         XCTAssertTrue(definition.identifies(messageBody: mgPlusApproval))
+        XCTAssertTrue(definition.identifies(messageBody: mgPlusCancellation))
         XCTAssertFalse(definition.identifies(messageBody: wonderApproval))
         XCTAssertFalse(definition.identifies(messageBody: betterCheckApproval))
 
@@ -26,7 +31,7 @@ final class MGPlusSHanaCardDefinitionTests: XCTestCase {
         XCTAssertFalse(betterCheck.identifies(messageBody: wonderApproval))
     }
 
-    func testParserExtractsConfirmedApprovalFieldsAndRejectsCancellationGuess() throws {
+    func testParserExtractsConfirmedApprovalAndCancellationFields() throws {
         let parsed = try XCTUnwrap(definition.parse(mgPlusApproval).transaction)
         XCTAssertEqual(parsed.kind, .approval)
         XCTAssertEqual(parsed.cardLast4, "1*3*")
@@ -38,11 +43,22 @@ final class MGPlusSHanaCardDefinitionTests: XCTestCase {
         XCTAssertEqual(parsed.merchant, "합성상점")
         XCTAssertNil(parsed.accountBalance)
 
-        let cancellation = definition.parse(
+        let cancellation = try XCTUnwrap(definition.parse(mgPlusCancellation).transaction)
+        XCTAssertEqual(cancellation.kind, .cancellation)
+        XCTAssertEqual(cancellation.cardLast4, "1*3*")
+        XCTAssertEqual(cancellation.amount, 13_100)
+        XCTAssertEqual(cancellation.month, 1)
+        XCTAssertEqual(cancellation.day, 16)
+        XCTAssertEqual(cancellation.hour, 9)
+        XCTAssertEqual(cancellation.minute, 0)
+        XCTAssertEqual(cancellation.merchant, "합성취소가맹점")
+        XCTAssertNil(cancellation.accountBalance)
+
+        let guessedCancellation = definition.parse(
             "[Web발신] MG+ 하나1*3*승인취소 홍*동 12,340원 01/16 합성취소가맹점"
         )
-        XCTAssertFalse(cancellation.isSuccess)
-        XCTAssertEqual(cancellation.failure?.kind, .unsupported)
+        XCTAssertFalse(guessedCancellation.isSuccess)
+        XCTAssertEqual(guessedCancellation.failure?.kind, .unsupported)
     }
 
     func testMaskedIdentifierRequiresTheStoredFirstAndThirdDigits() {
@@ -73,6 +89,13 @@ final class MGPlusSHanaCardDefinitionTests: XCTestCase {
 
     private var wonderApproval: String {
         "[Web발신] 하나9*8*승인 홍*동 5,200원 일시불 01/15 12:45 합성멤버십 누적98,765원"
+    }
+
+    private var mgPlusCancellation: String {
+        """
+        [Web발신]
+        MG+ 하나1*3*취소 홍*동 13,100원 일시불 01/16 09:00 합성취소가맹점 누적123,456원
+        """
     }
 
     private var betterCheckApproval: String {

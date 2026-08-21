@@ -1,12 +1,11 @@
 import Foundation
 
-/// Parses the confirmed MG+S 하나카드 approval layout.
+/// Parses the confirmed MG+S 하나카드 approval and cancellation layouts.
 ///
-/// Cancellation is deliberately unsupported until a privacy-safe real layout
-/// is confirmed. The value stored in `cardLast4` is the message's A*C* masked
-/// identifier; the owning card definition resolves it against card instances.
+/// The value stored in `cardLast4` is the message's A*C* masked identifier; the
+/// owning card definition resolves it against card instances.
 public struct MGPlusSHanaCardMessageParser: Sendable {
-    public static let currentParserVersion = "hana-mg-plus-s-message-v1"
+    public static let currentParserVersion = "hana-mg-plus-s-message-v2"
 
     public let parserVersion: String
 
@@ -25,13 +24,21 @@ public struct MGPlusSHanaCardMessageParser: Sendable {
         if normalized.filter({ !$0.isWhitespace }).contains("승인취소") {
             return unsupported(
                 originalMessage,
-                reason: "MG+S cancellation messages are not supported yet."
+                reason: "The unconfirmed MG+S 승인취소 layout is unsupported."
             )
         }
-        guard let match = firstMatch(in: normalized, pattern: Self.approvalPattern) else {
+        let kind: TransactionKind
+        let match: NSTextCheckingResult
+        if let cancellation = firstMatch(in: normalized, pattern: Self.cancellationPattern) {
+            kind = .cancellation
+            match = cancellation
+        } else if let approval = firstMatch(in: normalized, pattern: Self.approvalPattern) {
+            kind = .approval
+            match = approval
+        } else {
             return unsupported(
                 originalMessage,
-                reason: "No supported MG+S approval layout was found."
+                reason: "No supported MG+S approval or cancellation layout was found."
             )
         }
         guard
@@ -52,7 +59,7 @@ public struct MGPlusSHanaCardMessageParser: Sendable {
             (0...59).contains(minute),
             let merchantText = capture(7, from: match, in: normalized)
         else {
-            return failed(originalMessage, reason: "The MG+S approval fields are invalid.")
+            return failed(originalMessage, reason: "The MG+S transaction fields are invalid.")
         }
 
         let merchant = merchantText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -61,7 +68,7 @@ public struct MGPlusSHanaCardMessageParser: Sendable {
         }
 
         return .success(ParsedTransaction(
-            kind: .approval,
+            kind: kind,
             cardLast4: cardIdentifier,
             amount: amount,
             month: month,
@@ -75,6 +82,7 @@ public struct MGPlusSHanaCardMessageParser: Sendable {
     }
 
     private static let approvalPattern = #"MG\+\s*하나\s*([0-9]\*[0-9]\*)\s*승인(?!취소)\s+\S+\s+([0-9][0-9,]*)\s*원\s+\S+\s+([0-9]{1,2})\s*/\s*([0-9]{1,2})\s+([0-9]{1,2})\s*:\s*([0-9]{2})\s+(.+?)\s+누적\s*[0-9][0-9,]*\s*원"#
+    private static let cancellationPattern = #"MG\+\s*하나\s*([0-9]\*[0-9]\*)\s*취소\s+\S+\s+([0-9][0-9,]*)\s*원\s+\S+\s+([0-9]{1,2})\s*/\s*([0-9]{1,2})\s+([0-9]{1,2})\s*:\s*([0-9]{2})\s+(.+?)\s+누적\s*[0-9][0-9,]*\s*원"#
 
     private func firstMatch(in value: String, pattern: String) -> NSTextCheckingResult? {
         guard let expression = try? NSRegularExpression(pattern: pattern) else { return nil }

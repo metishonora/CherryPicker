@@ -5,7 +5,7 @@ import CherryPickerServer
 import Hummingbird
 import HummingbirdTesting
 
-/// Proposed black-box acceptance tests for the Issue #12 approval parser.
+/// Black-box acceptance tests for the Issue #12 approval and cancellation parser.
 ///
 /// The suite uses only the product HTTP boundary. It creates synthetic card
 /// instances, submits privacy-safe synthetic outbox events, and observes the
@@ -161,22 +161,23 @@ final class Issue12ParserBlackBoxAcceptanceTests: XCTestCase, @unchecked Sendabl
         }
     }
 
-    func testDeferredCancellationIsStoredForReviewWithoutGuessingACard() async throws {
+    func testConfirmedCancellationParsesAndAssignsTheMatchingMGPlusCard() async throws {
         let databaseURL = temporaryDatabaseURL()
         defer { removeDatabaseFiles(at: databaseURL) }
         let app = try makeApplication(databaseURL: databaseURL)
 
         try await app.test(.router) { client in
-            _ = try await createCard(
+            let card = try await createCard(
                 cardTypeCode: mgPlusCardTypeCode,
                 displayName: "합성 MG+S 하나카드",
                 lastFour: "1234",
                 using: client
             )
+            let cardID = try requiredString(card, key: "id")
 
             let originalMessage = """
             [Web발신]
-            MG+ 하나1*3*승인취소 홍*동 12,340원 01/16 09:00 합성취소가맹점
+            MG+ 하나1*3*취소 홍*동 13,100원 일시불 01/16 09:00 합성취소가맹점 누적123,456원
             """
             let result = try await ingest(
                 id: UUID(uuidString: "12000000-0000-0000-0000-000000000021")!,
@@ -185,14 +186,22 @@ final class Issue12ParserBlackBoxAcceptanceTests: XCTestCase, @unchecked Sendabl
                 using: client
             )
             XCTAssertEqual(result["status"] as? String, "accepted")
-            XCTAssertEqual(result["disposition"] as? String, "parseFailed")
+            XCTAssertEqual(result["disposition"] as? String, "stored")
 
             let resolved = try await transaction(
                 id: try requiredString(result, key: "transactionId"),
                 using: client
             )
-            XCTAssertEqual(resolved["parseStatus"] as? String, "failed")
-            assertUnassigned(resolved)
+            XCTAssertEqual(resolved["parseStatus"] as? String, "parsed")
+            XCTAssertEqual(resolved["cardId"] as? String, cardID)
+            XCTAssertEqual(resolved["cardLastFour"] as? String, "1234")
+            XCTAssertEqual(resolved["kind"] as? String, "cancellation")
+            XCTAssertEqual(resolved["amount"] as? Int, 13_100)
+            XCTAssertEqual(resolved["merchant"] as? String, "합성취소가맹점")
+            XCTAssertEqual(
+                try dateValue(resolved, key: "occurredAt"),
+                try requiredDate("2026-01-16T00:00:00Z")
+            )
 
             let encoded = try JSONSerialization.data(
                 withJSONObject: resolved,
@@ -201,7 +210,6 @@ final class Issue12ParserBlackBoxAcceptanceTests: XCTestCase, @unchecked Sendabl
             let safeBody = String(decoding: encoded, as: UTF8.self)
             XCTAssertFalse(safeBody.contains(originalMessage))
             XCTAssertFalse(safeBody.contains("originalMessage"))
-            XCTAssertFalse(safeBody.contains("합성취소가맹점"))
         }
     }
 
