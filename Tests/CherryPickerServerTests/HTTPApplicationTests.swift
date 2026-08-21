@@ -246,9 +246,77 @@ final class HTTPApplicationTests: XCTestCase {
                 let body = httpBodyString(response.body)
                 XCTAssertTrue(body.contains("detail-received-message"))
                 XCTAssertTrue(body.contains("data.receivedMessage"))
+                XCTAssertTrue(body.contains("id=\"detail-delete\""))
+                XCTAssertTrue(body.contains("method: 'DELETE'"))
+                XCTAssertTrue(body.contains("window.confirm"))
                 XCTAssertFalse(body.contains(event.originalMessage))
             }
         }
+    }
+
+    func testTransactionDeleteRequiresAuthorizationAndCSRFThenRemovesRawMessageAndReceipt() async throws {
+        let databaseURL = try temporaryDatabaseURL()
+        defer { removeDatabaseFiles(at: databaseURL) }
+        let store = try SQLiteEventStore(databaseURL: databaseURL)
+        let app = try makeApplication(store: store)
+        let event = OutboxEvent(
+            schemaVersion: OutboxEvent.currentSchemaVersion,
+            eventId: UUID(uuidString: "00000000-0000-0000-0000-000000000108")!,
+            capturedAt: try makeDate("2026-08-11T12:48:56+09:00"),
+            originalMessage: "[Web발신] 원더카드(8*9*) 알림"
+        )
+        let result = try await store.ingest(event)
+        let transactionID = try XCTUnwrap(result.transactionID)
+        let uri = "/api/v1/transactions/\(transactionID.uuidString)"
+        let allowedLogin = self.allowedLogin
+
+        try await app.test(.router) { client in
+            try await client.execute(uri: uri, method: .delete) { response in
+                XCTAssertEqual(response.status, .unauthorized)
+            }
+
+            try await client.execute(
+                uri: uri,
+                method: .delete,
+                headers: httpHeaders(login: allowedLogin)
+            ) { response in
+                XCTAssertEqual(response.status, .forbidden)
+            }
+
+            try await client.execute(
+                uri: uri,
+                method: .delete,
+                headers: httpHeaders(login: allowedLogin, csrf: true)
+            ) { response in
+                XCTAssertEqual(response.status, .ok)
+                XCTAssertEqual(httpBodyString(response.body), #"{"deleted":true}"#)
+            }
+
+            try await client.execute(
+                uri: uri,
+                method: .get,
+                headers: httpHeaders(login: allowedLogin)
+            ) { response in
+                XCTAssertEqual(response.status, .notFound)
+            }
+
+            try await client.execute(
+                uri: uri,
+                method: .delete,
+                headers: httpHeaders(login: allowedLogin, csrf: true)
+            ) { response in
+                XCTAssertEqual(response.status, .notFound)
+            }
+        }
+
+        let storedTransaction = await store.transaction(id: transactionID)
+        let storedReceipt = await store.receipt(for: event.eventId)
+        let transactionCount = await store.transactionCount()
+        let receiptCount = await store.receiptCount()
+        XCTAssertNil(storedTransaction)
+        XCTAssertNil(storedReceipt)
+        XCTAssertEqual(transactionCount, 0)
+        XCTAssertEqual(receiptCount, 0)
     }
 
     func testRootRequiresIdentityAndRendersMinimalHTMLWithoutOriginalMessage() async throws {
@@ -391,7 +459,8 @@ final class HTTPApplicationTests: XCTestCase {
 
 private func httpHeaders(
     login: String? = nil,
-    contentType: Bool = false
+    contentType: Bool = false,
+    csrf: Bool = false
 ) -> HTTPFields {
     var fields: HTTPFields = [:]
     if let login {
@@ -399,6 +468,9 @@ private func httpHeaders(
     }
     if contentType {
         fields[.contentType] = "application/json"
+    }
+    if csrf {
+        fields[.init("X-CherryPicker-CSRF")!] = "same-origin"
     }
     return fields
 }

@@ -246,6 +246,7 @@ enum ProductWebPage {
             .cp-actions { display: grid; grid-template-columns: 1fr 1.35fr; gap: 10px; margin-top: 28px; }
             .cp-button { min-height: 52px; padding: 13px 18px; border: 0; border-radius: 15px; background: var(--cp-soft); font-weight: 700; }
             .cp-button-primary { color: #17191d; background: var(--cp-accent); }
+            .cp-button-danger { width: 100%; margin-top: 10px; color: var(--cp-danger); background: color-mix(in srgb, var(--cp-danger) 10%, var(--cp-soft)); }
             .cp-detail-back { padding: 8px 0; border: 0; background: transparent; color: var(--cp-subtle); }
             .cp-toast {
               position: fixed; left: 50%; bottom: 24px; translate: -50% 0; z-index: 20;
@@ -470,6 +471,7 @@ enum ProductWebPage {
                     <pre id="detail-received-message" class="cp-received-message"></pre>
                   </details>
                   <div class="cp-actions"><button id="detail-cancel" class="cp-button" type="button">취소</button><button id="detail-save" class="cp-button cp-button-primary" type="button">저장하고 확인</button></div>
+                  <button id="detail-delete" class="cp-button cp-button-danger" type="button">거래 삭제</button>
                 </div>
               </section>
 
@@ -585,6 +587,9 @@ enum ProductWebPage {
                 const headers = new Headers(options.headers || {});
                 if (options.body) {
                   headers.set('Content-Type', 'application/json');
+                }
+                const method = (options.method || 'GET').toUpperCase();
+                if (method !== 'GET' && method !== 'HEAD') {
                   headers.set('X-CherryPicker-CSRF', 'same-origin');
                 }
                 const response = await fetch(path, { ...options, headers });
@@ -966,6 +971,16 @@ enum ProductWebPage {
                 toast('저장했습니다'); await showView(state.returnView);
               }
 
+              async function deleteTransaction() {
+                const transaction = state.activeTransaction; if (!transaction) return;
+                const confirmed = window.confirm('이 거래와 받은 문자 원문을 삭제할까요? 삭제한 내역은 복구할 수 없습니다.');
+                if (!confirmed) return;
+                await api(`/api/v1/transactions/${transaction.id}`, { method: 'DELETE' });
+                state.activeTransaction = null;
+                toast('거래를 삭제했습니다');
+                await showView(state.returnView);
+              }
+
               \#(CandidateCardSimulationWeb.script)
 
               $$('.cp-nav button').forEach(button => button.addEventListener('click', () => {
@@ -1032,6 +1047,7 @@ enum ProductWebPage {
               $('#aggregation-excluded').addEventListener('change', updateReviewPreview);
               $$('input[name="performance"]').forEach(input => input.addEventListener('change', updateReviewPreview));
               $('#detail-save').addEventListener('click', () => saveReview().catch(showError));
+              $('#detail-delete').addEventListener('click', () => deleteTransaction().catch(showError));
               $('#detail-cancel').addEventListener('click', () => showView(state.returnView).catch(showError));
               $('#detail-back').addEventListener('click', () => showView(state.returnView).catch(showError));
 
