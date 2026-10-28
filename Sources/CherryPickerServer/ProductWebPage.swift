@@ -114,7 +114,7 @@ enum ProductWebPage {
             .cp-list { border-top: 1px solid var(--cp-line); }
             .cp-row {
               width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto;
-              gap: 18px; padding: 19px 2px; border: 0; border-bottom: 1px solid var(--cp-line);
+              gap: 8px 18px; padding: 19px 2px; border: 0; border-bottom: 1px solid var(--cp-line);
               text-align: left; background: transparent;
             }
             .cp-row-main, .cp-row-side { display: grid; gap: 4px; }
@@ -124,6 +124,8 @@ enum ProductWebPage {
             .cp-row-side { justify-items: end; align-content: center; }
             .cp-row-amount { font-size: 18px; font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }
             .cp-row-amount.is-cancellation { color: var(--cp-negative); }
+            .cp-row-badges { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+            .cp-row-badge { padding: 3px 8px; border-radius: 6px; background: var(--cp-soft); color: var(--cp-subtle); font-size: 12px; font-weight: 600; }
             .cp-status { color: var(--cp-subtle); font-size: 13px; }
             .cp-status.is-unconfirmed { color: var(--cp-warning); }
             .cp-empty, .cp-error { padding: 48px 0; color: var(--cp-subtle); text-align: center; }
@@ -650,7 +652,6 @@ enum ProductWebPage {
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.className = 'cp-row';
-                button.setAttribute('aria-label', `${cardLabel}, ${transaction.merchant || '확인 필요'}, ${won(transaction.amount)}, ${kindLabel(transaction.kind)}, 상세 검토`);
                 const main = document.createElement('span'); main.className = 'cp-row-main';
                 if (includeCard) {
                   const cardText = document.createElement('span'); cardText.className = 'cp-row-card'; cardText.textContent = cardLabel; main.append(cardText);
@@ -662,6 +663,25 @@ enum ProductWebPage {
                 const amount = document.createElement('span'); amount.className = `cp-row-amount${transaction.kind === 'cancellation' ? ' is-cancellation' : ''}`; amount.textContent = `${transaction.kind === 'cancellation' ? '−' : ''}${won(transaction.amount)}`;
                 const status = document.createElement('span'); status.className = `cp-status${transaction.reviewStatus === 'unreviewed' ? ' is-unconfirmed' : ''}`; status.textContent = transaction.aggregationExcluded ? '집계 제외' : transaction.reviewStatus === 'unreviewed' ? '미확인' : '확인';
                 side.append(amount, status); button.append(main, side);
+                const badgeLabels = [];
+                if (transaction.reviewStatus === 'reviewed' && !transaction.aggregationExcluded) {
+                  if (transaction.performance === 'included') badgeLabels.push('실적');
+                  const transactionCard = state.cards.find(value => value.id === transaction.cardId);
+                  (transactionCard?.benefits || []).forEach(benefit => {
+                    if (transaction.benefitIds.includes(benefit.id)) badgeLabels.push(benefit.shortLabel);
+                  });
+                }
+                if (badgeLabels.length > 0) {
+                  const badges = document.createElement('span'); badges.className = 'cp-row-badges';
+                  badgeLabels.forEach(label => {
+                    const badge = document.createElement('span'); badge.className = 'cp-row-badge'; badge.textContent = label; badges.append(badge);
+                  });
+                  button.append(badges);
+                }
+                const decisionLabel = badgeLabels.length > 0
+                  ? `, ${badgeLabels.join(' · ')} ${transaction.kind === 'cancellation' ? '차감 반영' : '인정'}`
+                  : '';
+                button.setAttribute('aria-label', `${cardLabel}, ${transaction.merchant || '확인 필요'}, ${amount.textContent}, ${kindLabel(transaction.kind)}, ${status.textContent}${decisionLabel}, 상세 검토`);
                 button.addEventListener('click', () => openDetail(transaction.id));
                 return button;
               }

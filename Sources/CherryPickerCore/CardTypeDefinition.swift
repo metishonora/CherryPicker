@@ -5,6 +5,7 @@ public struct CardTypeBenefitDefinition: Equatable, Sendable {
     public let id: UUID
     public let code: String
     public let label: String
+    public let shortLabel: String
     public let eligibleMerchants: [String]
     public let minimumTransactionAmount: Int
     public let requiredPreviousMonthPerformanceAmount: Int?
@@ -17,6 +18,7 @@ public struct CardTypeBenefitDefinition: Equatable, Sendable {
         id: UUID,
         code: String,
         label: String,
+        shortLabel: String,
         eligibleMerchants: [String],
         minimumTransactionAmount: Int,
         requiredPreviousMonthPerformanceAmount: Int?,
@@ -28,6 +30,7 @@ public struct CardTypeBenefitDefinition: Equatable, Sendable {
         self.id = id
         self.code = code
         self.label = label
+        self.shortLabel = shortLabel
         self.eligibleMerchants = eligibleMerchants
         self.minimumTransactionAmount = minimumTransactionAmount
         self.requiredPreviousMonthPerformanceAmount = requiredPreviousMonthPerformanceAmount
@@ -130,6 +133,7 @@ public struct MGTheBetterCheckCardDefinition: CardTypeDefining {
             id: UUID(uuidString: "00000000-0000-0000-0001-000000004775")!,
             code: "simple-pay-cashback",
             label: "간편결제 20% 할인캐시백",
+            shortLabel: "간편결제",
             eligibleMerchants: ["네이버페이", "카카오페이", "페이코"],
             minimumTransactionAmount: 10_000,
             requiredPreviousMonthPerformanceAmount: 300_000,
@@ -140,6 +144,7 @@ public struct MGTheBetterCheckCardDefinition: CardTypeDefining {
             id: UUID(uuidString: "00000000-0000-0000-0002-000000004775")!,
             code: "online-shopping-cashback",
             label: "온라인 쇼핑 20% 할인캐시백",
+            shortLabel: "온라인 쇼핑",
             eligibleMerchants: ["쿠팡", "무신사", "지그재그", "W컨셉", "에이블리"],
             minimumTransactionAmount: 10_000,
             requiredPreviousMonthPerformanceAmount: 300_000,
@@ -150,6 +155,7 @@ public struct MGTheBetterCheckCardDefinition: CardTypeDefining {
             id: UUID(uuidString: "00000000-0000-0000-0003-000000004775")!,
             code: "coffee-cashback",
             label: "커피 20% 할인캐시백",
+            shortLabel: "커피",
             eligibleMerchants: [
                 "스타벅스", "투썸플레이스", "커피빈", "메가커피", "빽다방", "컴포즈커피"
             ],
@@ -222,6 +228,7 @@ public struct MGPlusSHanaCardDefinition: CardTypeDefining {
             id: UUID(uuidString: "00000000-0000-0012-0001-000000000001")!,
             code: "simple-pay-statement-discount",
             label: "간편결제 10% 청구할인",
+            shortLabel: "간편결제",
             eligibleMerchants: ["네이버페이", "카카오페이", "토스페이", "SSG페이", "11pay", "스마일페이"],
             minimumTransactionAmount: 10_000,
             requiredPreviousMonthPerformanceAmount: nil,
@@ -232,6 +239,7 @@ public struct MGPlusSHanaCardDefinition: CardTypeDefining {
             id: UUID(uuidString: "00000000-0000-0012-0002-000000000002")!,
             code: "streaming-statement-discount",
             label: "영상 스트리밍 50% 청구할인",
+            shortLabel: "영상 스트리밍",
             eligibleMerchants: ["유튜브", "디즈니플러스", "Wavve", "넷플릭스", "티빙"],
             minimumTransactionAmount: 0,
             requiredPreviousMonthPerformanceAmount: nil,
@@ -243,6 +251,7 @@ public struct MGPlusSHanaCardDefinition: CardTypeDefining {
             id: UUID(uuidString: "00000000-0000-0012-0003-000000000003")!,
             code: "digital-membership-statement-discount",
             label: "디지털 멤버십 50% 청구할인",
+            shortLabel: "디지털 멤버십",
             eligibleMerchants: ["네이버플러스멤버십", "컬리멤버스", "쿠팡와우멤버십"],
             minimumTransactionAmount: 0,
             requiredPreviousMonthPerformanceAmount: nil,

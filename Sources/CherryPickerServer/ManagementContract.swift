@@ -3,6 +3,7 @@ import Foundation
 public struct CardBenefit: Codable, Equatable, Sendable {
     public let id: UUID
     public let label: String
+    public let shortLabel: String
     public let eligibleMerchants: [String]
     public let minimumTransactionAmount: Int
     public let requiredPreviousMonthPerformanceAmount: Int?
@@ -14,6 +15,7 @@ public struct CardBenefit: Codable, Equatable, Sendable {
     public init(
         id: UUID,
         label: String,
+        shortLabel: String,
         eligibleMerchants: [String],
         minimumTransactionAmount: Int,
         requiredPreviousMonthPerformanceAmount: Int?,
@@ -24,6 +26,7 @@ public struct CardBenefit: Codable, Equatable, Sendable {
     ) {
         self.id = id
         self.label = label
+        self.shortLabel = shortLabel
         self.eligibleMerchants = eligibleMerchants
         self.minimumTransactionAmount = minimumTransactionAmount
         self.requiredPreviousMonthPerformanceAmount = requiredPreviousMonthPerformanceAmount

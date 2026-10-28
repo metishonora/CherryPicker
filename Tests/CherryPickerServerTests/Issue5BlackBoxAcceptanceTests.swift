@@ -42,6 +42,9 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
                     "‘더나은’ 정상 이용금액"
                 )
                 let benefits = try XCTUnwrap(card["benefits"] as? [[String: Any]])
+                XCTAssertEqual(benefits.compactMap { $0["shortLabel"] as? String }, [
+                    "간편결제", "온라인 쇼핑", "커피"
+                ])
                 XCTAssertEqual(benefits.compactMap { $0["label"] as? String }, [
                     "간편결제 20% 할인캐시백",
                     "온라인 쇼핑 20% 할인캐시백",
@@ -199,19 +202,19 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
             }
 
             let approvals = try await fetchTransactions(
-                uri: "/api/v1/cards/\(cardID)/transactions?filter=approval",
+                uri: "/api/v1/cards/\(cardID)/transactions?filter=approval&month=2026-08",
                 using: client
             )
             XCTAssertEqual(approvals.compactMap { $0["id"] as? String }, [approvalID])
 
             let cancellations = try await fetchTransactions(
-                uri: "/api/v1/cards/\(cardID)/transactions?filter=cancellation",
+                uri: "/api/v1/cards/\(cardID)/transactions?filter=cancellation&month=2026-08",
                 using: client
             )
             XCTAssertEqual(cancellations.compactMap { $0["id"] as? String }, [cancellationID])
 
             let excluded = try await fetchTransactions(
-                uri: "/api/v1/cards/\(cardID)/transactions?filter=excluded",
+                uri: "/api/v1/cards/\(cardID)/transactions?filter=excluded&month=2026-08",
                 using: client
             )
             XCTAssertEqual(excluded.compactMap { $0["id"] as? String }, [excludedID])
@@ -512,7 +515,7 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
                 try performanceAmount(from: includedDashboard) - 4_000
             )
             let excludedRows = try await fetchTransactions(
-                uri: "/api/v1/cards/\(cardID)/transactions?filter=excluded",
+                uri: "/api/v1/cards/\(cardID)/transactions?filter=excluded&month=2026-08",
                 using: client
             )
             XCTAssertEqual(excludedRows.compactMap { $0["id"] as? String }, [id])
@@ -655,7 +658,7 @@ final class Issue5BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
     ) async throws -> [String: Any] where Client: TestClientProtocol {
         let captured = LockedValue<[String: Any]?>(nil)
         try await client.execute(
-            uri: "/api/v1/cards/\(cardID)/dashboard",
+            uri: "/api/v1/cards/\(cardID)/dashboard?month=2026-08",
             method: .get,
             headers: managementHeaders(login: allowedLogin)
         ) { response in
