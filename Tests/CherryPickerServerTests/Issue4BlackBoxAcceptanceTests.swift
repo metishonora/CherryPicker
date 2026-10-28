@@ -238,7 +238,107 @@ final class Issue4BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
 
     // MARK: - Benefit summary
 
-    func testBenefitCapRetainsHiddenExcessAcrossCancellationsAndNeverDisplaysNegative() async throws {
+    func testChronologicalBenefitsPreviewAndPersistence() async throws {
+        let databaseURL = try temporaryDatabaseURL()
+        defer { removeDatabaseFiles(at: databaseURL) }
+        let storedCardID = LockedIssue4Value<String?>(nil)
+        let storedBenefitID = LockedIssue4Value<String?>(nil)
+        do {
+            let app = try makeApplication(databaseURL: databaseURL)
+            try await app.test(.router) { client in
+                let card = try await firstCard(using: client)
+                let cardID = try requiredString(card, key: "id")
+                let benefit = try XCTUnwrap((card["benefits"] as? [[String: Any]])?.first)
+                let benefitID = try requiredString(benefit, key: "id")
+                storedCardID.set(cardID); storedBenefitID.set(benefitID)
+                try await qualifyExistingCardBenefits(cardID: cardID, using: client)
+                let first = try await ingest(approval(
+                    id: UUID(), capturedAt: "2026-08-07T09:00:00+09:00",
+                    localDateTime: "08/07 09:00", amount: 27_000, merchant: "Synthetic First"
+                ), using: client)
+                let second = try await ingest(approval(
+                    id: UUID(), capturedAt: "2026-08-07T10:00:00+09:00",
+                    localDateTime: "08/07 10:00", amount: 15_000, merchant: "Synthetic Second"
+                ), using: client)
+                // Review order must not become benefit allocation order.
+                try await review(transactionID: second, performance: "included", benefitIDs: [benefitID], using: client)
+                try await review(transactionID: first, performance: "included", benefitIDs: [benefitID], using: client)
+                let cancelled = try await ingest(cancellation(
+                    id: UUID(), capturedAt: "2026-08-07T11:00:00+09:00",
+                    localDate: "08/07", amount: 27_000, merchant: "Synthetic Cancellation"
+                ), using: client)
+                let payload: [String: Any] = [
+                    "review": ["performance": "included", "benefitIds": [benefitID], "memo": "unsaved"],
+                    "aggregationExcluded": false
+                ]
+                let previewURI = "/api/v1/transactions/\(cancelled)/review-preview"
+                try await client.execute(uri: previewURI, method: .post,
+                    headers: issue4Headers(login: allowedLogin, mutation: true),
+                    body: issue4ByteBuffer(try issue4JSONData(payload))) { response in
+                    try requireIssue4Status(response, .ok)
+                    let preview = try XCTUnwrap(try issue4JSONObject(response.body)["dashboard"] as? [String: Any])
+                    XCTAssertEqual(try self.receivedBenefit(benefitID, in: preview), 600)
+                    XCTAssertFalse(issue4BodyString(response.body).contains("Synthetic Cancellation"))
+                }
+                let unchanged = try await dashboard(cardID: cardID, month: "2026-08", using: client)
+                XCTAssertEqual(try receivedBenefit(benefitID, in: unchanged), 6_000)
+                try await client.execute(uri: "/api/v1/transactions/\(cancelled)", method: .get,
+                    headers: issue4Headers(login: allowedLogin)) { response in
+                    let row = try XCTUnwrap(try issue4JSONObject(response.body)["transaction"] as? [String: Any])
+                    XCTAssertEqual(row["reviewStatus"] as? String, "unreviewed")
+                    XCTAssertEqual(row["memo"] as? String, "")
+                }
+                for (login, mutation, expected) in [
+                    (nil as String?, true, HTTPResponse.Status.unauthorized),
+                    (allowedLogin as String?, false, .forbidden)
+                ] {
+                    try await client.execute(uri: previewURI, method: .post,
+                        headers: issue4Headers(login: login, mutation: mutation),
+                        body: issue4ByteBuffer(try issue4JSONData(payload))) { response in
+                        XCTAssertEqual(response.status, expected)
+                    }
+                }
+                let invalid: [String: Any] = [
+                    "review": ["performance": "included", "benefitIds": [UUID().uuidString], "memo": ""],
+                    "aggregationExcluded": false
+                ]
+                try await client.execute(uri: previewURI, method: .post,
+                    headers: issue4Headers(login: allowedLogin, mutation: true),
+                    body: issue4ByteBuffer(try issue4JSONData(invalid))) { response in
+                    XCTAssertEqual(response.status, .badRequest)
+                }
+                try await review(transactionID: cancelled, performance: "included", benefitIDs: [benefitID], using: client)
+                let saved = try await dashboard(cardID: cardID, month: "2026-08", using: client)
+                XCTAssertEqual(try receivedBenefit(benefitID, in: saved), 600)
+                // Editing an earlier transaction needs a replay, not a delta on the current total.
+                let exclude: [String: Any] = [
+                    "review": ["performance": NSNull(), "benefitIds": [], "memo": ""],
+                    "aggregationExcluded": true
+                ]
+                try await client.execute(uri: "/api/v1/transactions/\(first)/review-preview", method: .post,
+                    headers: issue4Headers(login: allowedLogin, mutation: true),
+                    body: issue4ByteBuffer(try issue4JSONData(exclude))) { response in
+                    try requireIssue4Status(response, .ok)
+                    let preview = try XCTUnwrap(try issue4JSONObject(response.body)["dashboard"] as? [String: Any])
+                    XCTAssertEqual(try self.receivedBenefit(benefitID, in: preview), 0)
+                }
+                let later = try await ingest(approval(
+                    id: UUID(), capturedAt: "2026-08-07T12:00:00+09:00",
+                    localDateTime: "08/07 12:00", amount: 15_000, merchant: "Synthetic Later"
+                ), using: client)
+                try await review(transactionID: later, performance: "included", benefitIDs: [benefitID], using: client)
+                let afterLater = try await dashboard(cardID: cardID, month: "2026-08", using: client)
+                XCTAssertEqual(try receivedBenefit(benefitID, in: afterLater), 3_600)
+            }
+        }
+        let reopened = try makeApplication(databaseURL: databaseURL)
+        try await reopened.test(.router) { client in
+            let result = try await dashboard(cardID: XCTUnwrap(storedCardID.get()), month: "2026-08", using: client)
+            XCTAssertEqual(try receivedBenefit(XCTUnwrap(storedBenefitID.get()), in: result), 3_600)
+        }
+    }
+
+    func testBenefitCapDiscardsExcessBeforeCancellationsAndNeverDisplaysNegative() async throws {
         let databaseURL = try temporaryDatabaseURL()
         defer { removeDatabaseFiles(at: databaseURL) }
         let app = try makeApplication(databaseURL: databaseURL)
@@ -313,8 +413,8 @@ final class Issue4BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
             )
             XCTAssertEqual(
                 try receivedBenefit(benefitID, in: afterFirstCancellation),
-                maximum,
-                "A cancellation must subtract from the hidden raw amount, not the displayed cap."
+                maximum / 2,
+                "A cancellation deducts from the applied benefit; discarded excess cannot absorb it."
             )
 
             let secondCancellationID = try await ingest(
@@ -340,7 +440,7 @@ final class Issue4BlackBoxAcceptanceTests: XCTestCase, @unchecked Sendable {
             )
             XCTAssertEqual(
                 try receivedBenefit(benefitID, in: afterSecondCancellation),
-                maximum / 2
+                0
             )
 
             let floorCancellationID = try await ingest(

@@ -498,6 +498,7 @@ enum ProductWebPage {
               const currentMonth = monthKeyForDate(new Date());
               const earliestMonth = '2026-08';
               const state = { cards: [], selectedCardId: null, view: 'inbox', filter: 'all', month: currentMonth, activeTransaction: null, dashboard: null, returnView: 'inbox', settingsPreviousOffsets: null, settingsCurrentOffsets: null };
+              let reviewPreviewSequence = 0;
               let visiblePickerYear = Number(currentMonth.slice(0, 4));
               const card = () => state.cards.find(value => value.id === state.selectedCardId);
 
@@ -625,6 +626,7 @@ enum ProductWebPage {
               }
 
               async function showView(view) {
+                reviewPreviewSequence += 1;
                 clearError();
                 closeMonthPickers();
                 if (view === 'inbox' || view === 'simulation') {
@@ -877,12 +879,6 @@ enum ProductWebPage {
                 }));
               }
 
-              function benefitContribution(transaction, benefit) {
-                if (transaction.amount == null) return 0;
-                const sign = transaction.kind === 'cancellation' ? -1 : 1;
-                return sign * Math.trunc(transaction.amount * benefit.rateBasisPoints / 10000);
-              }
-
               function benefitTerms(benefit) {
                 const values = [];
                 if (benefit.eligibleMerchants.length > 0) values.push(`대상: ${benefit.eligibleMerchants.join(', ')}`);
@@ -892,56 +888,54 @@ enum ProductWebPage {
                 return values.join('\n');
               }
 
-              function integratedReviewBenefitProgress(dashboard, previewCalculations) {
-                const maximum = dashboard.benefitLimit.maximumAmount || 0;
-                const calculation = Array.from(previewCalculations.values()).reduce((sum, amount) => sum + amount, 0);
-                return { received: Math.max(0, Math.min(maximum, calculation)), maximum };
-              }
-
-              function updateReviewPreview() {
-                const transaction = state.activeTransaction, dashboard = state.dashboard, selectedCard = card();
-                if (!transaction || !dashboard || !selectedCard) return;
+              async function updateReviewPreview() {
+                const sequence = ++reviewPreviewSequence;
+                const transaction = state.activeTransaction, selectedCard = card();
+                if (!transaction || !state.dashboard || !selectedCard) return;
                 const excluded = $('#aggregation-excluded').checked;
                 $('#review-section').classList.toggle('is-disabled', excluded);
                 $$('#review-section input').forEach(input => { input.disabled = excluded; });
-                const chosenPerformance = document.querySelector('input[name="performance"]:checked')?.value;
-                const sign = transaction.kind === 'cancellation' ? -1 : 1;
-                let performance = dashboard.performance.currentAmount;
-                if (transaction.reviewStatus === 'reviewed' && !transaction.aggregationExcluded && transaction.performance === 'included' && transaction.amount != null) performance -= sign * transaction.amount;
-                if (!excluded && chosenPerformance === 'included' && transaction.amount != null) performance += sign * transaction.amount;
-                renderPerformanceGoal(
-                  performanceGoalFor(performance, selectedCard),
-                  selectedCard,
-                  true
-                );
-
-                const previewCalculations = new Map(selectedCard.benefits.map(benefit => {
-                  const checkbox = document.getElementById(`benefit-${benefit.id}`);
-                  let received = dashboard.benefits.find(value => value.id === benefit.id)?.calculationAmount || 0;
-                  if (transaction.reviewStatus === 'reviewed' && !transaction.aggregationExcluded && transaction.benefitIds.includes(benefit.id)) received -= benefitContribution(transaction, benefit);
-                  if (!excluded && checkbox.checked) received += benefitContribution(transaction, benefit);
-                  return [benefit.id, received];
-                }));
-                const integratedProgress = dashboard.benefitLimit.type === 'integrated'
-                  ? integratedReviewBenefitProgress(dashboard, previewCalculations)
-                  : null;
-
+                const performance = excluded ? null : document.querySelector('input[name="performance"]:checked')?.value || null;
+                const benefitIds = excluded ? [] : $$('#detail-benefits input:checked').map(input => input.value);
+                const isCurrent = () => sequence === reviewPreviewSequence
+                  && state.activeTransaction?.id === transaction.id && state.view === 'detail';
                 selectedCard.benefits.forEach(benefit => {
-                  const checkbox = document.getElementById(`benefit-${benefit.id}`);
-                  const progressWrap = document.getElementById(`benefit-progress-${benefit.id}`);
-                  const calculation = previewCalculations.get(benefit.id) || 0;
-                  const received = integratedProgress?.received
-                    ?? Math.max(0, benefit.maximumAmount == null ? calculation : Math.min(benefit.maximumAmount, calculation));
-                  const maximum = integratedProgress?.maximum ?? benefit.maximumAmount;
-                  progressWrap.hidden = !checkbox.checked || excluded;
-                  progressWrap.querySelector('strong').textContent = maximum == null ? won(received) : `${won(received)} / ${won(maximum)}`;
-                  const progress = progressWrap.querySelector('.cp-progress');
-                  progress.hidden = maximum == null;
-                  if (maximum != null) setProgress(progress, received, maximum);
+                  const wrap = document.getElementById(`benefit-progress-${benefit.id}`);
+                  wrap.hidden = !benefitIds.includes(benefit.id);
+                  wrap.querySelector('strong').textContent = '계산 중…';
+                  wrap.querySelector('.cp-progress').hidden = true;
                 });
+                try {
+                  const data = await api(`/api/v1/transactions/${transaction.id}/review-preview`, {
+                    method: 'POST',
+                    body: JSON.stringify({ review: { performance, benefitIds, memo: '' }, aggregationExcluded: excluded })
+                  });
+                  if (!isCurrent()) return;
+                  const dashboard = data.dashboard;
+                  clearError();
+                  renderPerformanceGoal(performanceGoalFor(dashboard.performance.currentAmount, selectedCard), selectedCard, true);
+                  selectedCard.benefits.forEach(benefit => {
+                    const value = dashboard.benefits.find(value => value.id === benefit.id);
+                    const integrated = dashboard.benefitLimit.type === 'integrated';
+                    const received = integrated ? dashboard.benefitLimit.receivedAmount : value.receivedAmount;
+                    const maximum = integrated ? dashboard.benefitLimit.maximumAmount : value.maximumAmount;
+                    const wrap = document.getElementById(`benefit-progress-${benefit.id}`);
+                    wrap.querySelector('strong').textContent = maximum == null ? won(received) : `${won(received)} / ${won(maximum)}`;
+                    const progress = wrap.querySelector('.cp-progress');
+                    progress.hidden = maximum == null;
+                    if (maximum != null) setProgress(progress, received, maximum);
+                  });
+                } catch (error) {
+                  if (!isCurrent()) return;
+                  selectedCard.benefits.forEach(benefit => {
+                    document.getElementById(`benefit-progress-${benefit.id}`).querySelector('strong').textContent = '계산 실패';
+                  });
+                  showError(error);
+                }
               }
 
               async function openDetail(id) {
+                reviewPreviewSequence += 1;
                 clearError();
                 state.returnView = state.view;
                 const data = await api(`/api/v1/transactions/${id}`); state.activeTransaction = data.transaction;

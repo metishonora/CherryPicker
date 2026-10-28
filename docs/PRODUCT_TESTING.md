@@ -11,6 +11,12 @@ Core, Server, SQLite와 HTTP 변경의 기본 검증:
 DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer swift test
 ```
 
+거래 검토 미리보기의 비동기 응답 순서, 오류 복구와 서버 계산값 표시는 다음으로 검증한다.
+
+```sh
+node --test Scripts/benefit-review-preview.test.mjs
+```
+
 테스트는 변경된 제품 흐름의 관찰 가능한 결과를 확인한다. 최소 제품에서는
 다음을 우선한다.
 

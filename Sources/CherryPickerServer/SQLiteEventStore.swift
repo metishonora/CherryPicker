@@ -576,7 +576,8 @@ public actor SQLiteEventStore {
         scope: String? = nil,
         cardID: UUID? = nil,
         filter: String? = nil,
-        period: DateInterval? = nil
+        period: DateInterval? = nil,
+        forCalculation: Bool = false
     ) throws -> [ManagedTransaction] {
         var clauses: [String] = []
         var bindings: [String] = []
@@ -621,7 +622,7 @@ public actor SQLiteEventStore {
         for (offset, value) in bindings.enumerated() {
             try bindText(value, to: statement, at: Int32(offset + 1))
         }
-        let transactions = try decodeManagedTransactions(from: statement)
+        let transactions = try decodeManagedTransactions(from: statement, forCalculation: forCalculation)
         guard let period else { return transactions }
         return transactions
             .filter { $0.occurredAt >= period.start && $0.occurredAt < period.end }
@@ -788,6 +789,37 @@ public actor SQLiteEventStore {
     }
 
     public func dashboard(cardID: UUID, month: DashboardMonth) throws -> CardDashboard? {
+        try dashboard(cardID: cardID, month: month, preview: nil)
+    }
+
+    /// Evaluate an unsaved review using the same monthly calculation, without writing rows.
+    public func previewTransactionReview(
+        id: UUID,
+        request: TransactionUpdateRequest
+    ) throws -> CardDashboard? {
+        guard let transaction = try managedTransaction(id: id) else { return nil }
+        guard let cardID = transaction.cardId,
+              let card = try managedCard(id: cardID) else {
+            throw ManagementStoreError.invalidInput
+        }
+        if !request.aggregationExcluded {
+            let allowed = Set(card.benefits.map(\.id))
+            guard request.review.benefitIds.allSatisfy(allowed.contains) else {
+                throw ManagementStoreError.invalidInput
+            }
+        }
+        return try dashboard(
+            cardID: cardID,
+            month: DashboardMonth(containing: transaction.occurredAt),
+            preview: (id, request)
+        )
+    }
+
+    private func dashboard(
+        cardID: UUID,
+        month: DashboardMonth,
+        preview: (id: UUID, request: TransactionUpdateRequest)?
+    ) throws -> CardDashboard? {
         guard let card = try managedCard(id: cardID) else { return nil }
         let previousMonth = try month.previous
         let previousCalculation = try monthlyCalculation(
@@ -832,17 +864,22 @@ public actor SQLiteEventStore {
             )
         }
 
-        let calculation = try monthlyCalculation(
-            card: card,
-            month: month,
-            benefitDefinitions: effectiveBenefits
-        )
-        let resolvedLimit: DashboardBenefitLimit
-        if card.benefitLimitPolicy.type == .integrated {
-            let maximum = card.benefitLimitPolicy.tiers?
+        let integratedMaximum = card.benefitLimitPolicy.type == .integrated
+            ? card.benefitLimitPolicy.tiers?
                 .filter { previousMonthPerformance >= $0.minimumPreviousMonthPerformanceAmount }
                 .max { $0.minimumPreviousMonthPerformanceAmount < $1.minimumPreviousMonthPerformanceAmount }?
                 .maximumAmount ?? 0
+            : nil
+        let calculation = try monthlyCalculation(
+            card: card,
+            month: month,
+            benefitDefinitions: effectiveBenefits,
+            integratedMaximumAmount: integratedMaximum,
+            preview: preview
+        )
+        let resolvedLimit: DashboardBenefitLimit
+        if card.benefitLimitPolicy.type == .integrated {
+            let maximum = integratedMaximum ?? 0
             let received = max(0, min(maximum, calculation.benefits.reduce(0) {
                 $0 + $1.calculationAmount
             }))
@@ -911,27 +948,35 @@ public actor SQLiteEventStore {
     private func monthlyCalculation(
         card: ManagedCard,
         month: DashboardMonth,
-        benefitDefinitions: [DashboardBenefitDefinition]
+        benefitDefinitions: [DashboardBenefitDefinition],
+        integratedMaximumAmount: Int? = nil,
+        preview: (id: UUID, request: TransactionUpdateRequest)? = nil
     ) throws -> MonthlyDashboardCalculation {
         let period = try month.interval
-        let transactions = try managedTransactions(cardID: card.id, period: period)
+        let transactions = try managedTransactions(cardID: card.id, period: period, forCalculation: true)
         let offsets = try monthlyOffsets(cardID: card.id, month: month)
         return MonthlyDashboardCalculator().calculate(
             period: period,
             benefits: benefitDefinitions,
-            transactions: transactions.map {
-                DashboardTransactionInput(
-                    occurredAt: $0.occurredAt,
-                    isReviewed: $0.reviewStatus == .reviewed,
-                    aggregationExcluded: $0.aggregationExcluded,
-                    kind: $0.kind == "cancellation" ? .cancellation :
-                        $0.kind == "approval" ? .approval : nil,
-                    amount: $0.amount,
-                    performance: $0.performance == .included ? .included :
-                        $0.performance == .excluded ? .excluded : nil,
-                    benefitIDs: Set($0.benefitIds)
+            transactions: transactions.map { transaction in
+                let override = preview.flatMap { $0.id == transaction.id ? $0.request : nil }
+                let excluded = override?.aggregationExcluded ?? transaction.aggregationExcluded
+                let performance = override.map { $0.review.performance } ?? transaction.performance
+                return DashboardTransactionInput(
+                    id: transaction.id,
+                    capturedAt: transaction.capturedAt,
+                    occurredAt: transaction.occurredAt,
+                    isReviewed: override != nil || transaction.reviewStatus == .reviewed,
+                    aggregationExcluded: excluded,
+                    kind: transaction.kind == "cancellation" ? .cancellation :
+                        transaction.kind == "approval" ? .approval : nil,
+                    amount: transaction.amount,
+                    performance: performance == .included ? .included :
+                        performance == .excluded ? .excluded : nil,
+                    benefitIDs: Set(override?.review.benefitIds ?? transaction.benefitIds)
                 )
             },
+            integratedMaximumAmount: integratedMaximumAmount,
             performanceOffsetAmount: offsets?.performanceOffsetAmount ?? 0,
             benefitOffsetAmounts: Dictionary(
                 uniqueKeysWithValues: offsets?.benefitOffsets.map {
@@ -1008,7 +1053,8 @@ public actor SQLiteEventStore {
     }
 
     private func decodeManagedTransactions(
-        from statement: OpaquePointer
+        from statement: OpaquePointer,
+        forCalculation: Bool = false
     ) throws -> [ManagedTransaction] {
         var values: [ManagedTransaction] = []
         while true {
@@ -1017,13 +1063,14 @@ public actor SQLiteEventStore {
             guard result == SQLITE_ROW else {
                 throw SQLiteEventStoreError.statement(lastSQLiteMessage())
             }
-            values.append(try decodeManagedTransaction(from: statement))
+            values.append(try decodeManagedTransaction(from: statement, forCalculation: forCalculation))
         }
         return values
     }
 
     private func decodeManagedTransaction(
-        from statement: OpaquePointer
+        from statement: OpaquePointer,
+        forCalculation: Bool = false
     ) throws -> ManagedTransaction {
         guard
             let idText = columnString(statement, at: 0),
@@ -1037,13 +1084,21 @@ public actor SQLiteEventStore {
         let cardDisplayName = columnString(statement, at: 2)
         let cardLastFour = columnString(statement, at: 3)
         let capturedAt = Date(timeIntervalSince1970: sqlite3_column_double(statement, 4))
-        let occurredAt = resolvedOccurredAt(
+        var occurredAt = resolvedOccurredAt(
             capturedAt: capturedAt,
             month: nullableInt(statement, at: 5),
             day: nullableInt(statement, at: 6),
             hour: nullableInt(statement, at: 7),
             minute: nullableInt(statement, at: 8)
         )
+        if forCalculation && (nullableInt(statement, at: 7) == nil || nullableInt(statement, at: 8) == nil) {
+            // A date-only cancellation must not precede all timed approvals at midnight.
+            // Use capture time within its stated day; delayed delivery sorts at day end.
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = TimeZone(identifier: DashboardMonth.timeZoneIdentifier)!
+            let day = calendar.dateInterval(of: .day, for: occurredAt)!
+            occurredAt = min(max(capturedAt, day.start), day.end.addingTimeInterval(-0.001))
+        }
         let reviewStatus: TransactionReviewStatus = columnString(statement, at: 13) == nil
             ? .unreviewed
             : .reviewed
