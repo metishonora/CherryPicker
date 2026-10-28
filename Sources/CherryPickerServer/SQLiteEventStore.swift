@@ -973,6 +973,7 @@ public actor SQLiteEventStore {
             CardBenefit(
                 id: $0.id,
                 label: $0.label,
+                shortLabel: $0.shortLabel,
                 eligibleMerchants: $0.eligibleMerchants,
                 minimumTransactionAmount: $0.minimumTransactionAmount,
                 requiredPreviousMonthPerformanceAmount: $0.requiredPreviousMonthPerformanceAmount,

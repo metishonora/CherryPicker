@@ -56,6 +56,9 @@ final class Issue12AggregationBlackBoxAcceptanceTests: XCTestCase, @unchecked Se
             )
 
             guard let benefits = contractObjects(card, key: "benefits") else { return }
+            XCTAssertEqual(benefits.compactMap { $0["shortLabel"] as? String }, [
+                "간편결제", "영상 스트리밍", "디지털 멤버십"
+            ])
             XCTAssertEqual(benefits.count, 3)
             guard benefits.count == 3 else { return }
             let benefitsByLabel = Dictionary(
