@@ -404,6 +404,34 @@ public struct CherryPickerHTTPApplication {
             }
         }
 
+        router.post("/api/v1/transactions/bulk-review") { request, _ async -> EditedResponse<String> in
+            guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
+                return Self.unauthorizedResponse()
+            }
+            guard Self.hasValidCSRFHeader(request) else {
+                return Self.forbiddenResponse()
+            }
+            do {
+                let body = try await request.body.collect(upTo: Self.maxBatchBodyBytes)
+                let update = try codec.decode(
+                    BulkTransactionReviewRequest.self, from: Data(body.readableBytesView)
+                )
+                guard let transactions = try await store.reviewTransactions(update.items) else {
+                    return Self.notFoundResponse()
+                }
+                return Self.jsonResponse(
+                    status: .ok,
+                    data: try codec.encode(TransactionsResponse(transactions: transactions))
+                )
+            } catch ManagementStoreError.invalidInput {
+                return Self.badRequestResponse()
+            } catch is DecodingError {
+                return Self.badRequestResponse()
+            } catch {
+                return Self.internalErrorResponse()
+            }
+        }
+
         router.post("/api/v1/transactions/:id/review-preview") { request, context async -> EditedResponse<String> in
             guard authorizer.isAuthorized(login: Self.tailscaleLogin(from: request)) else {
                 return Self.unauthorizedResponse()
