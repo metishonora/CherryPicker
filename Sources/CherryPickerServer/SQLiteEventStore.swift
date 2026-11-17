@@ -713,6 +713,62 @@ public actor SQLiteEventStore {
         id: UUID,
         request: TransactionUpdateRequest
     ) throws -> ManagedTransaction? {
+        guard let review = try validatedReview(id: id, request: request) else { return nil }
+
+        try beginTransaction()
+        do {
+            try writeReview(review)
+            try commitTransaction()
+        } catch {
+            rollbackTransaction()
+            throw error
+        }
+        return try managedTransaction(id: id)
+    }
+
+    /// Apply several reviews atomically. Every item is validated before any
+    /// row is written, so one invalid or missing transaction leaves all
+    /// transactions unchanged.
+    public func reviewTransactions(
+        _ items: [BulkTransactionReviewItem]
+    ) throws -> [ManagedTransaction]? {
+        let ids = items.map(\.id)
+        guard !items.isEmpty, Set(ids).count == ids.count else {
+            throw ManagementStoreError.invalidInput
+        }
+        var reviews: [ValidatedTransactionReview] = []
+        for item in items {
+            guard let review = try validatedReview(id: item.id, request: item.request) else {
+                return nil
+            }
+            reviews.append(review)
+        }
+
+        try beginTransaction()
+        do {
+            for review in reviews {
+                try writeReview(review)
+            }
+            try commitTransaction()
+        } catch {
+            rollbackTransaction()
+            throw error
+        }
+        return try ids.compactMap { try managedTransaction(id: $0) }
+    }
+
+    private struct ValidatedTransactionReview {
+        let id: UUID
+        let performance: PerformanceDecision?
+        let benefitIDs: [UUID]
+        let memo: String
+        let aggregationExcluded: Bool
+    }
+
+    private func validatedReview(
+        id: UUID,
+        request: TransactionUpdateRequest
+    ) throws -> ValidatedTransactionReview? {
         guard let transaction = try managedTransaction(id: id) else { return nil }
         guard let assignedCardID = transaction.cardId else {
             throw ManagementStoreError.invalidInput
@@ -736,56 +792,58 @@ public actor SQLiteEventStore {
                 throw ManagementStoreError.invalidInput
             }
         }
+        return ValidatedTransactionReview(
+            id: id,
+            performance: performance,
+            benefitIDs: benefitIDs,
+            memo: request.review.memo,
+            aggregationExcluded: request.aggregationExcluded
+        )
+    }
 
-        try beginTransaction()
-        do {
-            let reviewStatement = try prepare("""
-                INSERT INTO transaction_reviews (
-                    transaction_id, performance, memo, aggregation_excluded, reviewed_at
-                ) VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(transaction_id) DO UPDATE SET
-                    performance = excluded.performance,
-                    memo = excluded.memo,
-                    aggregation_excluded = excluded.aggregation_excluded,
-                    reviewed_at = excluded.reviewed_at
-                """)
-            defer { sqlite3_finalize(reviewStatement) }
-            try bindText(id.uuidString, to: reviewStatement, at: 1)
-            try bindOptionalText(performance?.rawValue, to: reviewStatement, at: 2)
-            try bindText(request.review.memo, to: reviewStatement, at: 3)
-            try bindInt(request.aggregationExcluded ? 1 : 0, to: reviewStatement, at: 4)
-            try bindDouble(Date().timeIntervalSince1970, to: reviewStatement, at: 5)
-            guard sqlite3_step(reviewStatement) == SQLITE_DONE else {
-                throw SQLiteEventStoreError.statement(lastSQLiteMessage())
-            }
-
-            let deleteStatement = try prepare(
-                "DELETE FROM transaction_benefits WHERE transaction_id = ?"
-            )
-            defer { sqlite3_finalize(deleteStatement) }
-            try bindText(id.uuidString, to: deleteStatement, at: 1)
-            guard sqlite3_step(deleteStatement) == SQLITE_DONE else {
-                throw SQLiteEventStoreError.statement(lastSQLiteMessage())
-            }
-
-            for benefitID in benefitIDs {
-                let insertStatement = try prepare("""
-                    INSERT INTO transaction_benefits (transaction_id, benefit_id)
-                    VALUES (?, ?)
-                    """)
-                defer { sqlite3_finalize(insertStatement) }
-                try bindText(id.uuidString, to: insertStatement, at: 1)
-                try bindText(benefitID.uuidString, to: insertStatement, at: 2)
-                guard sqlite3_step(insertStatement) == SQLITE_DONE else {
-                    throw SQLiteEventStoreError.statement(lastSQLiteMessage())
-                }
-            }
-            try commitTransaction()
-        } catch {
-            rollbackTransaction()
-            throw error
+    /// Caller owns the surrounding SQLite transaction.
+    private func writeReview(_ review: ValidatedTransactionReview) throws {
+        let reviewStatement = try prepare("""
+            INSERT INTO transaction_reviews (
+                transaction_id, performance, memo, aggregation_excluded, reviewed_at
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(transaction_id) DO UPDATE SET
+                performance = excluded.performance,
+                memo = excluded.memo,
+                aggregation_excluded = excluded.aggregation_excluded,
+                reviewed_at = excluded.reviewed_at
+            """)
+        defer { sqlite3_finalize(reviewStatement) }
+        try bindText(review.id.uuidString, to: reviewStatement, at: 1)
+        try bindOptionalText(review.performance?.rawValue, to: reviewStatement, at: 2)
+        try bindText(review.memo, to: reviewStatement, at: 3)
+        try bindInt(review.aggregationExcluded ? 1 : 0, to: reviewStatement, at: 4)
+        try bindDouble(Date().timeIntervalSince1970, to: reviewStatement, at: 5)
+        guard sqlite3_step(reviewStatement) == SQLITE_DONE else {
+            throw SQLiteEventStoreError.statement(lastSQLiteMessage())
         }
-        return try managedTransaction(id: id)
+
+        let deleteStatement = try prepare(
+            "DELETE FROM transaction_benefits WHERE transaction_id = ?"
+        )
+        defer { sqlite3_finalize(deleteStatement) }
+        try bindText(review.id.uuidString, to: deleteStatement, at: 1)
+        guard sqlite3_step(deleteStatement) == SQLITE_DONE else {
+            throw SQLiteEventStoreError.statement(lastSQLiteMessage())
+        }
+
+        for benefitID in review.benefitIDs {
+            let insertStatement = try prepare("""
+                INSERT INTO transaction_benefits (transaction_id, benefit_id)
+                VALUES (?, ?)
+                """)
+            defer { sqlite3_finalize(insertStatement) }
+            try bindText(review.id.uuidString, to: insertStatement, at: 1)
+            try bindText(benefitID.uuidString, to: insertStatement, at: 2)
+            guard sqlite3_step(insertStatement) == SQLITE_DONE else {
+                throw SQLiteEventStoreError.statement(lastSQLiteMessage())
+            }
+        }
     }
 
     public func dashboard(cardID: UUID, month: DashboardMonth) throws -> CardDashboard? {
