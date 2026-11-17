@@ -166,6 +166,14 @@ start_launch_agent() {
 	local service="$domain/$LABEL"
 	if /bin/launchctl print "$service" >/dev/null 2>&1; then
 		/bin/launchctl bootout "$service" || die "launchctl could not unload the existing launch agent"
+		# bootout returns before launchd finishes unloading; bootstrapping too
+		# early fails with "Bootstrap failed: 5: Input/output error".
+		local waited=0
+		while /bin/launchctl print "$service" >/dev/null 2>&1; do
+			(( waited < 100 )) || die "launchctl did not finish unloading the existing launch agent"
+			/bin/sleep 0.1
+			waited=$((waited + 1))
+		done
 	fi
 	/bin/launchctl bootstrap "$domain" "$plist_path" || die "launchctl could not bootstrap the launch agent"
 	/bin/launchctl kickstart -k "$service" || die "launchctl could not start the launch agent"
