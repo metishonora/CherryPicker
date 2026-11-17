@@ -99,6 +99,8 @@ public enum DashboardPerformanceDecision: Equatable, Sendable {
 }
 
 public struct DashboardTransactionInput: Equatable, Sendable {
+    public let id: UUID
+    public let capturedAt: Date
     public let occurredAt: Date
     public let isReviewed: Bool
     public let aggregationExcluded: Bool
@@ -108,6 +110,8 @@ public struct DashboardTransactionInput: Equatable, Sendable {
     public let benefitIDs: Set<UUID>
 
     public init(
+        id: UUID,
+        capturedAt: Date,
         occurredAt: Date,
         isReviewed: Bool,
         aggregationExcluded: Bool,
@@ -116,6 +120,8 @@ public struct DashboardTransactionInput: Equatable, Sendable {
         performance: DashboardPerformanceDecision?,
         benefitIDs: Set<UUID>
     ) {
+        self.id = id
+        self.capturedAt = capturedAt
         self.occurredAt = occurredAt
         self.isReviewed = isReviewed
         self.aggregationExcluded = aggregationExcluded
@@ -153,6 +159,7 @@ public struct MonthlyDashboardCalculator: Sendable {
         period: DateInterval,
         benefits: [DashboardBenefitDefinition],
         transactions: [DashboardTransactionInput],
+        integratedMaximumAmount: Int? = nil,
         performanceOffsetAmount: Int = 0,
         benefitOffsetAmounts: [UUID: Int] = [:]
     ) -> MonthlyDashboardCalculation {
@@ -161,9 +168,15 @@ public struct MonthlyDashboardCalculator: Sendable {
         var unconfirmedAmount = 0
         var unconfirmedCount = 0
         var benefitUnconfirmedCount = 0
-        var rawBenefitAmounts = Dictionary(uniqueKeysWithValues: benefits.map { ($0.id, 0) })
+        var appliedBenefitAmounts = Dictionary(uniqueKeysWithValues: benefits.map { ($0.id, 0) })
+        var integratedAmount = 0
+        let orderedTransactions = transactions.sorted {
+            if $0.occurredAt != $1.occurredAt { return $0.occurredAt < $1.occurredAt }
+            if $0.capturedAt != $1.capturedAt { return $0.capturedAt < $1.capturedAt }
+            return $0.id.uuidString < $1.id.uuidString
+        }
 
-        for transaction in transactions where contains(transaction.occurredAt, in: period) {
+        for transaction in orderedTransactions where contains(transaction.occurredAt, in: period) {
             guard !transaction.aggregationExcluded else { continue }
 
             guard transaction.isReviewed else {
@@ -184,10 +197,22 @@ public struct MonthlyDashboardCalculator: Sendable {
                 break
             }
 
-            for benefitID in transaction.benefitIDs {
-                guard let benefit = benefits.first(where: { $0.id == benefitID }) else { continue }
-                rawBenefitAmounts[benefitID, default: 0] +=
-                    sign * amount * benefit.rateBasisPoints / 10_000
+            // Definition order breaks ties when a transaction selects multiple benefits.
+            for benefit in benefits where transaction.benefitIDs.contains(benefit.id) {
+                var contribution = sign * amount * benefit.rateBasisPoints / 10_000
+                if transaction.kind != .cancellation {
+                    if let maximum = benefit.maximumAmount {
+                        let used = max(0, appliedBenefitAmounts[benefit.id, default: 0])
+                        contribution = min(contribution, max(0, maximum - used))
+                    }
+                    if let maximum = integratedMaximumAmount {
+                        contribution = min(contribution, max(0, maximum - max(0, integratedAmount)))
+                    }
+                }
+                // Cancellations retain the existing rate-based signed deduction.
+                // Unused benefits on earlier approvals are never redistributed.
+                appliedBenefitAmounts[benefit.id, default: 0] += contribution
+                integratedAmount += contribution
             }
         }
 
@@ -200,7 +225,8 @@ public struct MonthlyDashboardCalculator: Sendable {
                 unconfirmedCount: unconfirmedCount
             ),
             benefits: benefits.map { benefit in
-                let adjustedAmount = rawBenefitAmounts[benefit.id, default: 0]
+                // Offsets reconcile the final balance, never historical allocation.
+                let adjustedAmount = appliedBenefitAmounts[benefit.id, default: 0]
                     + benefitOffsetAmounts[benefit.id, default: 0]
                 return DashboardBenefitCalculation(
                     id: benefit.id,

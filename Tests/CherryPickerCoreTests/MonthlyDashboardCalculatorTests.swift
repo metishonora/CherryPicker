@@ -43,92 +43,125 @@ final class MonthlyDashboardCalculatorTests: XCTestCase {
         XCTAssertEqual(result.benefitUnconfirmedCount, 1)
     }
 
-    func testBenefitDisplayClampsOnlyAfterAllApprovalsAndCancellationsAreCombined() throws {
-        let benefitID = UUID(uuidString: "00000000-0000-0000-0001-000000004475")!
-        let benefit = DashboardBenefitDefinition(
-            id: benefitID,
-            rateBasisPoints: 1_000,
-            maximumAmount: 5_000
-        )
-        let month = try DashboardMonth(identifier: "2026-08")
+    private let benefitID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+    private let secondBenefitID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
 
-        let stillCapped = calculator.calculate(
-            period: try month.interval,
-            benefits: [benefit],
-            transactions: [
-                transaction(amount: 100_000, benefitIDs: [benefitID]),
-                transaction(amount: 20_000, kind: .cancellation, benefitIDs: [benefitID])
-            ]
-        )
-        XCTAssertEqual(stillCapped.benefits.first?.calculationAmount, 8_000)
-        XCTAssertEqual(stillCapped.benefits.first?.receivedAmount, 5_000)
-
-        let belowCap = calculator.calculate(
-            period: try month.interval,
-            benefits: [benefit],
-            transactions: [
-                transaction(amount: 100_000, benefitIDs: [benefitID]),
-                transaction(amount: 60_000, kind: .cancellation, benefitIDs: [benefitID])
-            ]
-        )
-        XCTAssertEqual(belowCap.benefits.first?.calculationAmount, 4_000)
-        XCTAssertEqual(belowCap.benefits.first?.receivedAmount, 4_000)
-
-        let floored = calculator.calculate(
-            period: try month.interval,
-            benefits: [benefit],
-            transactions: [
-                transaction(amount: 100_000, benefitIDs: [benefitID]),
-                transaction(amount: 200_000, kind: .cancellation, benefitIDs: [benefitID])
-            ]
-        )
-        XCTAssertEqual(floored.benefits.first?.calculationAmount, -10_000)
-        XCTAssertEqual(floored.benefits.first?.receivedAmount, 0)
+    func testCancellationDoesNotRetroactivelyRewardEarlierCappedApproval() throws {
+        let transactions = [
+            transaction(id: 1, amount: 900, benefitIDs: [benefitID]),
+            transaction(id: 2, amount: 500, benefitIDs: [benefitID]),
+            transaction(id: 3, amount: 900, kind: .cancellation, benefitIDs: [benefitID])
+        ]
+        XCTAssertEqual(try calculate(transactions).benefits.first?.receivedAmount, 10)
+        XCTAssertEqual(try calculate(transactions.reversed()).benefits.first?.receivedAmount, 10)
+        let laterApproval = transaction(id: 4, amount: 500, benefitIDs: [benefitID])
+        XCTAssertEqual(try calculate(transactions + [laterApproval]).benefits.first?.receivedAmount, 60)
     }
 
-    func testSignedOffsetsUseStableBenefitIDsAndClampOnlyTheDisplayedBenefit() throws {
-        let benefitIDs = [
-            UUID(uuidString: "00000000-0000-0000-0001-000000001010")!,
-            UUID(uuidString: "00000000-0000-0000-0002-000000001010")!,
-            UUID(uuidString: "00000000-0000-0000-0003-000000001010")!
+    func testOversizedApprovalDiscardsExcessAndKeepsSignedCancellationForOffset() throws {
+        let transactions = [
+            transaction(id: 1, amount: 2_000, benefitIDs: [benefitID]),
+            transaction(id: 2, amount: 1_500, kind: .cancellation, benefitIDs: [benefitID])
         ]
-        let benefits = benefitIDs.map {
-            DashboardBenefitDefinition(id: $0, rateBasisPoints: 2_000, maximumAmount: 6_000)
-        }
-        let unknownBenefitID = UUID(uuidString: "00000000-0000-0000-9999-000000001010")!
-        let month = try DashboardMonth(identifier: "2026-08")
+        let result = try calculate(transactions)
+        XCTAssertEqual(result.benefits.first?.calculationAmount, -50)
+        XCTAssertEqual(result.benefits.first?.receivedAmount, 0)
+        let corrected = try calculate(transactions, offsets: [benefitID: 70])
+        XCTAssertEqual(corrected.benefits.first?.receivedAmount, 20)
+    }
 
+    func testOffsetsApplyAfterAllocationAndCannotChangePastHeadroom() throws {
+        let transactions = [
+            transaction(id: 1, amount: 900, benefitIDs: [benefitID]),
+            transaction(id: 2, amount: 500, benefitIDs: [benefitID]),
+            // The second approval received 10 but retains its rate-based 50 deduction.
+            transaction(id: 3, amount: 500, kind: .cancellation, benefitIDs: [benefitID])
+        ]
+        XCTAssertEqual(try calculate(transactions).benefits.first?.receivedAmount, 50)
+        XCTAssertEqual(try calculate(transactions, offsets: [benefitID: 40]).benefits.first?.receivedAmount, 90)
+        XCTAssertEqual(try calculate(transactions, offsets: [benefitID: -20]).benefits.first?.receivedAmount, 30)
+        XCTAssertEqual(try calculate(transactions, offsets: [benefitID: 500]).benefits.first?.receivedAmount, 100)
+        XCTAssertEqual(try calculate(transactions, offsets: [benefitID: -500]).benefits.first?.receivedAmount, 0)
+    }
+
+    func testIntegratedLimitFollowsTransactionOrderAcrossBenefits() throws {
+        let transactions = [
+            transaction(id: 1, amount: 900, benefitIDs: [secondBenefitID]),
+            transaction(id: 2, amount: 500, benefitIDs: [benefitID]),
+            transaction(id: 3, amount: 900, kind: .cancellation, benefitIDs: [secondBenefitID])
+        ]
+        let result = try calculate(transactions.reversed(), integrated: true)
+        XCTAssertEqual(result.benefits.map(\.calculationAmount), [10, 0])
+        let later = transaction(id: 4, amount: 500, benefitIDs: [secondBenefitID])
+        XCTAssertEqual(try calculate(transactions + [later], integrated: true).benefits.map(\.calculationAmount), [10, 50])
+    }
+
+    func testSeparateLimitsAndMultipleSelectedBenefitsStayIndependent() throws {
+        let result = try calculate([
+            transaction(id: 1, amount: 900, benefitIDs: [benefitID, secondBenefitID]),
+            transaction(id: 2, amount: 500, benefitIDs: [benefitID, secondBenefitID]),
+            transaction(id: 3, amount: 900, kind: .cancellation, benefitIDs: [benefitID])
+        ])
+        XCTAssertEqual(result.benefits.map(\.receivedAmount), [10, 100])
+        let integrated = try calculate([
+            transaction(id: 1, amount: 900, benefitIDs: [benefitID, secondBenefitID])
+        ], integrated: true)
+        XCTAssertEqual(integrated.benefits.map(\.calculationAmount), [90, 10])
+    }
+
+    func testUnreviewedExcludedAndOtherMonthTransactionsDoNotConsumeLimit() throws {
+        let result = try calculate([
+            transaction(id: 1, amount: 2_000, isReviewed: false, benefitIDs: [benefitID]),
+            transaction(id: 2, amount: 2_000, aggregationExcluded: true, benefitIDs: [benefitID]),
+            transaction(id: 3, occurredAt: "2026-09-01T00:00:00+09:00", amount: 2_000, benefitIDs: [benefitID]),
+            transaction(id: 4, amount: 900, benefitIDs: [benefitID]),
+            transaction(id: 5, amount: 900, kind: .cancellation)
+        ])
+        XCTAssertEqual(result.benefits.first?.receivedAmount, 90)
+        XCTAssertEqual(result.benefitUnconfirmedCount, 1)
+    }
+
+    func testOccurrenceThenCaptureThenIDDetermineOrder() throws {
+        let approval = transaction(id: 1, occurredAt: "2026-08-15T09:00:00+09:00", capturedAt: "2026-08-16T12:00:00+09:00", amount: 2_000, benefitIDs: [benefitID])
+        let cancellation = transaction(id: 2, occurredAt: "2026-08-15T10:00:00+09:00", amount: 500, kind: .cancellation, benefitIDs: [benefitID])
+        XCTAssertEqual(try calculate([cancellation, approval]).benefits.first?.receivedAmount, 50)
+        let earlierCapture = transaction(id: 9, capturedAt: "2026-08-15T12:00:00+09:00", amount: 2_000, benefitIDs: [benefitID])
+        let laterCapture = transaction(id: 1, capturedAt: "2026-08-15T13:00:00+09:00", amount: 500, kind: .cancellation, benefitIDs: [benefitID])
+        XCTAssertEqual(try calculate([laterCapture, earlierCapture]).benefits.first?.receivedAmount, 50)
+    }
+
+    func testZeroAndUnlimitedLimits() throws {
         let result = calculator.calculate(
-            period: try month.interval,
-            benefits: benefits,
-            transactions: [
-                transaction(
-                    amount: 300_000,
-                    performance: .included,
-                    benefitIDs: Set(benefitIDs)
-                )
+            period: try DashboardMonth(identifier: "2026-08").interval,
+            benefits: [
+                DashboardBenefitDefinition(id: benefitID, rateBasisPoints: 1_000, maximumAmount: 0),
+                DashboardBenefitDefinition(id: secondBenefitID, rateBasisPoints: 1_000, maximumAmount: nil)
             ],
-            performanceOffsetAmount: -20_000,
-            benefitOffsetAmounts: [
-                benefitIDs[0]: -57_000,
-                benefitIDs[1]: 5_000,
-                benefitIDs[2]: -65_000,
-                unknownBenefitID: 999_999
-            ]
+            transactions: [transaction(amount: 2_000, benefitIDs: [benefitID, secondBenefitID])]
         )
+        XCTAssertEqual(result.benefits.map(\.receivedAmount), [0, 200])
+    }
 
-        XCTAssertEqual(result.performance.currentAmount, 280_000)
-        XCTAssertEqual(result.benefits[0].calculationAmount, 3_000)
-        XCTAssertEqual(result.benefits[0].receivedAmount, 3_000)
-        XCTAssertEqual(result.benefits[1].calculationAmount, 65_000)
-        XCTAssertEqual(result.benefits[1].receivedAmount, 6_000)
-        XCTAssertEqual(result.benefits[2].calculationAmount, -5_000)
-        XCTAssertEqual(result.benefits[2].receivedAmount, 0)
-        XCTAssertEqual(result.benefits.map(\.id), benefitIDs)
+    private func calculate(
+        _ transactions: [DashboardTransactionInput],
+        integrated: Bool = false,
+        offsets: [UUID: Int] = [:]
+    ) throws -> MonthlyDashboardCalculation {
+        calculator.calculate(
+            period: try DashboardMonth(identifier: "2026-08").interval,
+            benefits: [benefitID, secondBenefitID].map {
+                DashboardBenefitDefinition(id: $0, rateBasisPoints: 1_000, maximumAmount: integrated ? nil : 100)
+            },
+            transactions: transactions,
+            integratedMaximumAmount: integrated ? 100 : nil,
+            benefitOffsetAmounts: offsets
+        )
     }
 
     private func transaction(
+        id: Int = 1,
         occurredAt: String = "2026-08-15T12:00:00+09:00",
+        capturedAt: String? = nil,
         amount: Int,
         isReviewed: Bool = true,
         aggregationExcluded: Bool = false,
@@ -137,6 +170,8 @@ final class MonthlyDashboardCalculatorTests: XCTestCase {
         benefitIDs: Set<UUID> = []
     ) -> DashboardTransactionInput {
         DashboardTransactionInput(
+            id: UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", id))!,
+            capturedAt: date(capturedAt ?? occurredAt),
             occurredAt: date(occurredAt),
             isReviewed: isReviewed,
             aggregationExcluded: aggregationExcluded,

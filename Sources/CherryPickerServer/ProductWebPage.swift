@@ -255,6 +255,33 @@ enum ProductWebPage {
               padding: 12px 18px; border-radius: 999px; color: var(--cp-text); background: var(--cp-soft);
               box-shadow: 0 12px 30px color-mix(in srgb, #000 20%, transparent);
             }
+            .cp-inbox-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+            .cp-inbox-toolbar label { display: inline-flex; align-items: center; gap: 8px; font-weight: 650; }
+            .cp-inbox-toolbar input { width: 20px; height: 20px; accent-color: var(--cp-accent); }
+            .cp-button-compact { min-height: 40px; padding: 8px 14px; border-radius: 12px; }
+            .cp-row-select { display: none; width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--cp-accent); pointer-events: none; }
+            .is-selecting .cp-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+            .is-selecting .cp-row-select { display: block; }
+            .is-selecting .cp-row-badges { grid-column: 2 / -1; }
+            .is-selecting .cp-row[aria-pressed="true"] { background: var(--cp-accent-soft); }
+            .is-selecting .cp-row:disabled { opacity: .45; cursor: default; }
+            .cp-bulk-bar {
+              position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+              margin-top: 18px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-radius: 18px 18px 0 0;
+              background: var(--cp-surface); box-shadow: 0 -8px 24px color-mix(in srgb, #000 12%, transparent); font-weight: 700;
+            }
+            .cp-bulk-backdrop { position: fixed; inset: 0; z-index: 20; background: color-mix(in srgb, #000 40%, transparent); }
+            .cp-bulk-panel {
+              position: fixed; left: 50%; bottom: 0; z-index: 21; width: min(100%, 640px); transform: translateX(-50%);
+              max-height: 80vh; max-height: 80dvh; overflow-y: auto; overscroll-behavior: contain;
+              padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); border-radius: 20px 20px 0 0;
+              background: var(--cp-surface); box-shadow: 0 -10px 30px color-mix(in srgb, #000 18%, transparent);
+            }
+            .cp-bulk-panel .cp-check-row { padding: 12px 14px; }
+            .cp-bulk-panel .cp-actions { position: sticky; bottom: calc(-20px - env(safe-area-inset-bottom)); padding: 12px 0 calc(20px + env(safe-area-inset-bottom)); margin-bottom: calc(-20px - env(safe-area-inset-bottom)); background: var(--cp-surface); }
+            .cp-bulk-panel h2 { margin: 0 0 14px; font-size: 18px; }
+            .cp-bulk-panel h3 { margin: 18px 0 10px; color: var(--cp-subtle); font-size: 14px; }
+            .cp-bulk-panel .cp-actions { margin-top: 18px; }
             .cp-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
             @media (max-width: 520px) {
               .cp-header { padding: 16px; align-items: stretch; flex-direction: column; gap: 10px; }
@@ -293,8 +320,26 @@ enum ProductWebPage {
             <main class="cp-main">
               <section id="view-inbox">
                 <div class="cp-heading"><h1>확인할 거래가 <span class="cp-accent"><span id="inbox-count">0</span>건</span> 있어요</h1><p>모든 카드에서 아직 확인하지 않은 거래를 모았습니다.</p></div>
+                <div id="inbox-toolbar" class="cp-inbox-toolbar" hidden>
+                  <label id="inbox-select-all-label" hidden><input id="inbox-select-all" type="checkbox"><span id="inbox-selected-count">0건 선택</span></label>
+                  <button id="inbox-select-toggle" class="cp-button cp-button-compact" type="button">여러 건 선택</button>
+                </div>
                 <div id="inbox-list" class="cp-list"></div>
                 <p id="inbox-empty" class="cp-empty" hidden>확인할 거래가 없습니다.</p>
+                <div id="bulk-bar" class="cp-bulk-bar" hidden>
+                  <span id="bulk-bar-count">0건 선택</span>
+                  <button id="bulk-open" class="cp-button cp-button-primary cp-button-compact" type="button">실적·혜택 설정</button>
+                </div>
+                <div id="bulk-backdrop" class="cp-bulk-backdrop" hidden></div>
+                <section id="bulk-panel" class="cp-bulk-panel" role="dialog" aria-modal="true" aria-labelledby="bulk-title" hidden>
+                  <h2 id="bulk-title">선택한 거래 한 번에 확인</h2>
+                  <div class="cp-choice-grid" role="radiogroup" aria-label="실적 인정 여부">
+                    <div class="cp-choice"><input id="bulk-performance-included" name="bulk-performance" type="radio" value="included"><label for="bulk-performance-included">실적 인정</label></div>
+                    <div class="cp-choice"><input id="bulk-performance-excluded" name="bulk-performance" type="radio" value="excluded"><label for="bulk-performance-excluded">실적 제외</label></div>
+                  </div>
+                  <div id="bulk-benefits"></div>
+                  <div class="cp-actions"><button id="bulk-cancel" class="cp-button" type="button">닫기</button><button id="bulk-save" class="cp-button cp-button-primary" type="button" disabled>저장하고 확인</button></div>
+                </section>
               </section>
 
               \#(CandidateCardSimulationWeb.body)
@@ -497,7 +542,8 @@ enum ProductWebPage {
               };
               const currentMonth = monthKeyForDate(new Date());
               const earliestMonth = '2026-08';
-              const state = { cards: [], selectedCardId: null, view: 'inbox', filter: 'all', month: currentMonth, activeTransaction: null, dashboard: null, returnView: 'inbox', settingsPreviousOffsets: null, settingsCurrentOffsets: null };
+              const state = { cards: [], selectedCardId: null, view: 'inbox', filter: 'all', month: currentMonth, activeTransaction: null, dashboard: null, returnView: 'inbox', inboxTransactions: [], selecting: false, selectedIds: new Set(), bulkSheetOpen: false, settingsPreviousOffsets: null, settingsCurrentOffsets: null };
+              let reviewPreviewSequence = 0;
               let visiblePickerYear = Number(currentMonth.slice(0, 4));
               const card = () => state.cards.find(value => value.id === state.selectedCardId);
 
@@ -625,6 +671,7 @@ enum ProductWebPage {
               }
 
               async function showView(view) {
+                reviewPreviewSequence += 1;
                 clearError();
                 closeMonthPickers();
                 if (view === 'inbox' || view === 'simulation') {
@@ -645,7 +692,7 @@ enum ProductWebPage {
                 if (view === 'settings') await loadSettings();
               }
 
-              function transactionRow(transaction, includeCard) {
+              function transactionRow(transaction, includeCard, selectable = false) {
                 const cardLabel = transaction.cardDisplayName && transaction.cardLastFour
                   ? `${transaction.cardDisplayName} · ${transaction.cardLastFour}`
                   : '카드 미배정';
@@ -653,6 +700,11 @@ enum ProductWebPage {
                 button.type = 'button';
                 button.className = 'cp-row';
                 const main = document.createElement('span'); main.className = 'cp-row-main';
+                if (selectable) {
+                  const check = document.createElement('input'); check.type = 'checkbox'; check.className = 'cp-row-select'; check.tabIndex = -1; check.setAttribute('aria-hidden', 'true');
+                  check.checked = state.selectedIds.has(transaction.id);
+                  button.append(check);
+                }
                 if (includeCard) {
                   const cardText = document.createElement('span'); cardText.className = 'cp-row-card'; cardText.textContent = cardLabel; main.append(cardText);
                 }
@@ -682,7 +734,18 @@ enum ProductWebPage {
                   ? `, ${badgeLabels.join(' · ')} ${transaction.kind === 'cancellation' ? '차감 반영' : '인정'}`
                   : '';
                 button.setAttribute('aria-label', `${cardLabel}, ${transaction.merchant || '확인 필요'}, ${amount.textContent}, ${kindLabel(transaction.kind)}, ${status.textContent}${decisionLabel}, 상세 검토`);
-                button.addEventListener('click', () => openDetail(transaction.id));
+                button.addEventListener('click', () => {
+                  if (selectable && state.selecting) { toggleInboxSelection(transaction.id); return; }
+                  openDetail(transaction.id).catch(showError);
+                });
+                if (selectable) {
+                  button.dataset.transactionId = transaction.id;
+                  if (state.selecting) {
+                    button.setAttribute('aria-pressed', String(state.selectedIds.has(transaction.id)));
+                    button.disabled = !transaction.cardId;
+                    button.setAttribute('aria-label', `${button.getAttribute('aria-label').replace(/, 상세 검토$/, '')}, ${transaction.cardId ? '선택' : '카드 미배정이라 선택 불가'}`);
+                  }
+                }
                 return button;
               }
 
@@ -696,9 +759,127 @@ enum ProductWebPage {
 
               async function loadInbox() {
                 const data = await api('/api/v1/transactions?scope=unreviewed');
+                state.inboxTransactions = data.transactions;
+                const ids = new Set(data.transactions.map(value => value.id));
+                state.selectedIds = new Set([...state.selectedIds].filter(id => ids.has(id)));
+                if (data.transactions.length === 0) state.selecting = false;
                 $('#inbox-count').textContent = data.transactions.length;
-                const list = $('#inbox-list'); list.replaceChildren(...data.transactions.map(value => transactionRow(value, true)));
                 $('#inbox-empty').hidden = data.transactions.length !== 0;
+                renderInbox();
+              }
+
+              const selectableInboxTransactions = () => state.inboxTransactions.filter(value => value.cardId);
+
+              function renderInbox() {
+                const list = $('#inbox-list');
+                list.classList.toggle('is-selecting', state.selecting);
+                list.replaceChildren(...state.inboxTransactions.map(value => transactionRow(value, true, true)));
+                $('#inbox-toolbar').hidden = selectableInboxTransactions().length === 0 && !state.selecting;
+                $('#inbox-select-toggle').textContent = state.selecting ? '선택 취소' : '여러 건 선택';
+                $('#inbox-select-all-label').hidden = !state.selecting;
+                renderBulkPanel();
+              }
+
+              function toggleInboxSelection(id) {
+                if (state.selectedIds.has(id)) state.selectedIds.delete(id); else state.selectedIds.add(id);
+                const row = $(`#inbox-list [data-transaction-id="${id}"]`);
+                if (row) {
+                  row.setAttribute('aria-pressed', String(state.selectedIds.has(id)));
+                  row.querySelector('.cp-row-select').checked = state.selectedIds.has(id);
+                }
+                renderBulkPanel();
+              }
+
+              function setBulkSheetOpen(open) {
+                state.bulkSheetOpen = open;
+                renderBulkPanel();
+                if (open) { $('#bulk-panel').scrollTop = 0; $('#bulk-performance-included').focus({ preventScroll: true }); }
+                else if (!$('#bulk-bar').hidden) $('#bulk-open').focus({ preventScroll: true });
+              }
+
+              function setInboxSelecting(selecting) {
+                state.selecting = selecting;
+                state.bulkSheetOpen = false;
+                state.selectedIds = new Set();
+                $$('input[name="bulk-performance"]').forEach(input => { input.checked = false; });
+                renderInbox();
+              }
+
+              function selectedInboxTransactions() {
+                return state.inboxTransactions.filter(value => state.selectedIds.has(value.id));
+              }
+
+              function renderBulkPanel() {
+                const selected = selectedInboxTransactions();
+                const selectable = selectableInboxTransactions();
+                $('#inbox-selected-count').textContent = `${selected.length}건 선택`;
+                const selectAll = $('#inbox-select-all');
+                selectAll.checked = selectable.length > 0 && selected.length === selectable.length;
+                selectAll.indeterminate = selected.length > 0 && selected.length < selectable.length;
+                const hasSelection = state.selecting && selected.length > 0;
+                if (!hasSelection) state.bulkSheetOpen = false;
+                $('#bulk-bar').hidden = !hasSelection || state.bulkSheetOpen;
+                $('#bulk-bar-count').textContent = `${selected.length}건 선택`;
+                const panel = $('#bulk-panel');
+                panel.hidden = !state.bulkSheetOpen;
+                $('#bulk-backdrop').hidden = !state.bulkSheetOpen;
+                document.body.style.overflow = state.bulkSheetOpen ? 'hidden' : '';
+                if (panel.hidden) return;
+                $('#bulk-title').textContent = `선택한 ${selected.length}건 한 번에 확인`;
+                const checkedBenefits = new Set($$('#bulk-benefits input:checked').map(input => input.value));
+                const cardIds = [...new Set(selected.map(value => value.cardId))];
+                const groups = cardIds.map(cardId => state.cards.find(value => value.id === cardId)).filter(value => value && value.benefits.length > 0);
+                const container = $('#bulk-benefits'); container.replaceChildren();
+                groups.forEach(selectedCard => {
+                  const count = selected.filter(value => value.cardId === selectedCard.id).length;
+                  const heading = document.createElement('h3');
+                  heading.textContent = groups.length > 1 || cardIds.length > 1
+                    ? `${selectedCard.displayName} · ${selectedCard.lastFour} 혜택 (${count}건)`
+                    : '혜택';
+                  container.append(heading);
+                  selectedCard.benefits.forEach(benefit => {
+                    const key = `${selectedCard.id}:${benefit.id}`;
+                    const row = document.createElement('div'); row.className = 'cp-check-row';
+                    const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.id = `bulk-benefit-${selectedCard.id}-${benefit.id}`; checkbox.value = key; checkbox.checked = checkedBenefits.has(key);
+                    const label = document.createElement('label'); label.htmlFor = checkbox.id; label.textContent = benefit.label;
+                    row.append(checkbox, label); container.append(row);
+                  });
+                });
+                updateBulkSaveState();
+              }
+
+              function updateBulkSaveState() {
+                const performance = document.querySelector('input[name="bulk-performance"]:checked')?.value;
+                $('#bulk-save').disabled = !performance || selectedInboxTransactions().length === 0;
+              }
+
+              async function saveBulkReview() {
+                const selected = selectedInboxTransactions();
+                const performance = document.querySelector('input[name="bulk-performance"]:checked')?.value || null;
+                if (selected.length === 0) return;
+                if (!performance) { showError(new Error('실적 인정 또는 제외를 선택해 주세요.')); return; }
+                const checked = $$('#bulk-benefits input:checked').map(input => input.value.split(':'));
+                const items = selected.map(transaction => ({
+                  id: transaction.id,
+                  review: {
+                    performance,
+                    benefitIds: checked.filter(([cardId]) => cardId === transaction.cardId).map(([, benefitId]) => benefitId),
+                    memo: transaction.memo || ''
+                  },
+                  aggregationExcluded: false
+                }));
+                $('#bulk-save').disabled = true;
+                try {
+                  await api('/api/v1/transactions/bulk-review', { method: 'POST', body: JSON.stringify({ items }) });
+                } catch (error) {
+                  updateBulkSaveState();
+                  throw error;
+                }
+                clearError();
+                toast(`${items.length}건을 확인했습니다`);
+                state.selecting = false; state.selectedIds = new Set(); state.bulkSheetOpen = false;
+                $$('input[name="bulk-performance"]').forEach(input => { input.checked = false; });
+                await loadInbox();
               }
 
               function setProgress(element, current, maximum) {
@@ -877,12 +1058,6 @@ enum ProductWebPage {
                 }));
               }
 
-              function benefitContribution(transaction, benefit) {
-                if (transaction.amount == null) return 0;
-                const sign = transaction.kind === 'cancellation' ? -1 : 1;
-                return sign * Math.trunc(transaction.amount * benefit.rateBasisPoints / 10000);
-              }
-
               function benefitTerms(benefit) {
                 const values = [];
                 if (benefit.eligibleMerchants.length > 0) values.push(`대상: ${benefit.eligibleMerchants.join(', ')}`);
@@ -892,56 +1067,54 @@ enum ProductWebPage {
                 return values.join('\n');
               }
 
-              function integratedReviewBenefitProgress(dashboard, previewCalculations) {
-                const maximum = dashboard.benefitLimit.maximumAmount || 0;
-                const calculation = Array.from(previewCalculations.values()).reduce((sum, amount) => sum + amount, 0);
-                return { received: Math.max(0, Math.min(maximum, calculation)), maximum };
-              }
-
-              function updateReviewPreview() {
-                const transaction = state.activeTransaction, dashboard = state.dashboard, selectedCard = card();
-                if (!transaction || !dashboard || !selectedCard) return;
+              async function updateReviewPreview() {
+                const sequence = ++reviewPreviewSequence;
+                const transaction = state.activeTransaction, selectedCard = card();
+                if (!transaction || !state.dashboard || !selectedCard) return;
                 const excluded = $('#aggregation-excluded').checked;
                 $('#review-section').classList.toggle('is-disabled', excluded);
                 $$('#review-section input').forEach(input => { input.disabled = excluded; });
-                const chosenPerformance = document.querySelector('input[name="performance"]:checked')?.value;
-                const sign = transaction.kind === 'cancellation' ? -1 : 1;
-                let performance = dashboard.performance.currentAmount;
-                if (transaction.reviewStatus === 'reviewed' && !transaction.aggregationExcluded && transaction.performance === 'included' && transaction.amount != null) performance -= sign * transaction.amount;
-                if (!excluded && chosenPerformance === 'included' && transaction.amount != null) performance += sign * transaction.amount;
-                renderPerformanceGoal(
-                  performanceGoalFor(performance, selectedCard),
-                  selectedCard,
-                  true
-                );
-
-                const previewCalculations = new Map(selectedCard.benefits.map(benefit => {
-                  const checkbox = document.getElementById(`benefit-${benefit.id}`);
-                  let received = dashboard.benefits.find(value => value.id === benefit.id)?.calculationAmount || 0;
-                  if (transaction.reviewStatus === 'reviewed' && !transaction.aggregationExcluded && transaction.benefitIds.includes(benefit.id)) received -= benefitContribution(transaction, benefit);
-                  if (!excluded && checkbox.checked) received += benefitContribution(transaction, benefit);
-                  return [benefit.id, received];
-                }));
-                const integratedProgress = dashboard.benefitLimit.type === 'integrated'
-                  ? integratedReviewBenefitProgress(dashboard, previewCalculations)
-                  : null;
-
+                const performance = excluded ? null : document.querySelector('input[name="performance"]:checked')?.value || null;
+                const benefitIds = excluded ? [] : $$('#detail-benefits input:checked').map(input => input.value);
+                const isCurrent = () => sequence === reviewPreviewSequence
+                  && state.activeTransaction?.id === transaction.id && state.view === 'detail';
                 selectedCard.benefits.forEach(benefit => {
-                  const checkbox = document.getElementById(`benefit-${benefit.id}`);
-                  const progressWrap = document.getElementById(`benefit-progress-${benefit.id}`);
-                  const calculation = previewCalculations.get(benefit.id) || 0;
-                  const received = integratedProgress?.received
-                    ?? Math.max(0, benefit.maximumAmount == null ? calculation : Math.min(benefit.maximumAmount, calculation));
-                  const maximum = integratedProgress?.maximum ?? benefit.maximumAmount;
-                  progressWrap.hidden = !checkbox.checked || excluded;
-                  progressWrap.querySelector('strong').textContent = maximum == null ? won(received) : `${won(received)} / ${won(maximum)}`;
-                  const progress = progressWrap.querySelector('.cp-progress');
-                  progress.hidden = maximum == null;
-                  if (maximum != null) setProgress(progress, received, maximum);
+                  const wrap = document.getElementById(`benefit-progress-${benefit.id}`);
+                  wrap.hidden = !benefitIds.includes(benefit.id);
+                  wrap.querySelector('strong').textContent = '계산 중…';
+                  wrap.querySelector('.cp-progress').hidden = true;
                 });
+                try {
+                  const data = await api(`/api/v1/transactions/${transaction.id}/review-preview`, {
+                    method: 'POST',
+                    body: JSON.stringify({ review: { performance, benefitIds, memo: '' }, aggregationExcluded: excluded })
+                  });
+                  if (!isCurrent()) return;
+                  const dashboard = data.dashboard;
+                  clearError();
+                  renderPerformanceGoal(performanceGoalFor(dashboard.performance.currentAmount, selectedCard), selectedCard, true);
+                  selectedCard.benefits.forEach(benefit => {
+                    const value = dashboard.benefits.find(value => value.id === benefit.id);
+                    const integrated = dashboard.benefitLimit.type === 'integrated';
+                    const received = integrated ? dashboard.benefitLimit.receivedAmount : value.receivedAmount;
+                    const maximum = integrated ? dashboard.benefitLimit.maximumAmount : value.maximumAmount;
+                    const wrap = document.getElementById(`benefit-progress-${benefit.id}`);
+                    wrap.querySelector('strong').textContent = maximum == null ? won(received) : `${won(received)} / ${won(maximum)}`;
+                    const progress = wrap.querySelector('.cp-progress');
+                    progress.hidden = maximum == null;
+                    if (maximum != null) setProgress(progress, received, maximum);
+                  });
+                } catch (error) {
+                  if (!isCurrent()) return;
+                  selectedCard.benefits.forEach(benefit => {
+                    document.getElementById(`benefit-progress-${benefit.id}`).querySelector('strong').textContent = '계산 실패';
+                  });
+                  showError(error);
+                }
               }
 
               async function openDetail(id) {
+                reviewPreviewSequence += 1;
                 clearError();
                 state.returnView = state.view;
                 const data = await api(`/api/v1/transactions/${id}`); state.activeTransaction = data.transaction;
@@ -1064,6 +1237,19 @@ enum ProductWebPage {
                   showError(error);
                 }
               });
+              $('#inbox-select-toggle').addEventListener('click', () => setInboxSelecting(!state.selecting));
+              $('#inbox-select-all').addEventListener('change', event => {
+                state.selectedIds = event.target.checked ? new Set(selectableInboxTransactions().map(value => value.id)) : new Set();
+                renderInbox();
+              });
+              $$('input[name="bulk-performance"]').forEach(input => input.addEventListener('change', updateBulkSaveState));
+              $('#bulk-open').addEventListener('click', () => setBulkSheetOpen(true));
+              $('#bulk-cancel').addEventListener('click', () => setBulkSheetOpen(false));
+              $('#bulk-backdrop').addEventListener('click', () => setBulkSheetOpen(false));
+              document.addEventListener('keydown', event => {
+                if (event.key === 'Escape' && state.bulkSheetOpen) setBulkSheetOpen(false);
+              });
+              $('#bulk-save').addEventListener('click', () => saveBulkReview().catch(showError));
               $('#aggregation-excluded').addEventListener('change', updateReviewPreview);
               $$('input[name="performance"]').forEach(input => input.addEventListener('change', updateReviewPreview));
               $('#detail-save').addEventListener('click', () => saveReview().catch(showError));

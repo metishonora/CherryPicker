@@ -380,7 +380,7 @@ final class Issue12AggregationBlackBoxAcceptanceTests: XCTestCase, @unchecked Se
                 benefitRows.reduce(0) { partial, row in
                     partial + (row["calculationAmount"] as? Int ?? 0)
                 },
-                40_000
+                30_000
             )
             let displayedBenefitAmounts = benefitRows.compactMap {
                 $0["receivedAmount"] as? Int
@@ -394,6 +394,28 @@ final class Issue12AggregationBlackBoxAcceptanceTests: XCTestCase, @unchecked Se
                 240_000,
                 "Payments receiving a benefit still count toward performance when reviewed as included."
             )
+            // The fourth payment got no benefit. Cancelling the first must not reward it retroactively.
+            let cancelled = try await ingestMGPlusApproval(
+                eventID: UUID(), capturedAt: "2026-08-14T13:00:00+09:00",
+                maskedIdentifier: "1*3*", amount: "100,000", monthDay: "08/14", time: "12:00",
+                merchant: "합성취소", kind: "취소", using: client
+            )
+            try await review(transactionID: cancelled, performance: "included", benefitIDs: [simplePayID], using: client)
+            let afterCancellation = try await dashboard(cardID: cardID, month: "2026-08", using: client)
+            XCTAssertEqual(try requiredObject(afterCancellation, key: "benefitLimit")["receivedAmount"] as? Int, 20_000)
+            let rows = try requiredObjects(afterCancellation, key: "benefits")
+            XCTAssertEqual(rows.first { $0["id"] as? String == simplePayID }?["receivedAmount"] as? Int, 0)
+            XCTAssertEqual(rows.first { $0["id"] as? String == streamingID }?["receivedAmount"] as? Int, 10_000)
+            XCTAssertEqual(rows.first { $0["id"] as? String == membershipID }?["receivedAmount"] as? Int, 10_000)
+            let later = try await ingestMGPlusApproval(
+                eventID: UUID(), capturedAt: "2026-08-15T13:00:00+09:00",
+                maskedIdentifier: "1*3*", amount: "50,000", monthDay: "08/15", time: "12:00",
+                merchant: "합성복원한도", using: client
+            )
+            try await review(transactionID: later, performance: "included", benefitIDs: [simplePayID], using: client)
+            let afterLater = try await dashboard(cardID: cardID, month: "2026-08", using: client)
+            XCTAssertEqual(try requiredObject(afterLater, key: "benefitLimit")["receivedAmount"] as? Int, 25_000)
+
         }
     }
 
@@ -560,9 +582,8 @@ final class Issue12AggregationBlackBoxAcceptanceTests: XCTestCase, @unchecked Se
                 XCTAssertTrue(html.contains("id=\"benefit-overview-progress\""))
                 XCTAssertTrue(html.contains("받은 통합혜택"))
                 XCTAssertTrue(html.contains("받은 혜택"))
-                XCTAssertTrue(html.contains("function integratedReviewBenefitProgress"))
-                XCTAssertTrue(html.contains("dashboard.benefitLimit.maximumAmount || 0"))
-                XCTAssertTrue(html.contains("integratedReviewBenefitProgress(dashboard, previewCalculations)"))
+                XCTAssertTrue(html.contains("/review-preview"))
+                XCTAssertTrue(html.contains("dashboard.benefitLimit.maximumAmount"))
                 XCTAssertTrue(html.contains("integrated ? won(value.receivedAmount)"))
                 XCTAssertTrue(html.contains("혜택별 받은 금액"))
                 XCTAssertTrue(html.contains("cp-benefit-summary"))
@@ -672,6 +693,7 @@ final class Issue12AggregationBlackBoxAcceptanceTests: XCTestCase, @unchecked Se
         monthDay: String,
         time: String,
         merchant: String,
+        kind: String = "승인",
         using client: Client
     ) async throws -> String where Client: TestClientProtocol {
         let request: [String: Any] = [
@@ -681,7 +703,7 @@ final class Issue12AggregationBlackBoxAcceptanceTests: XCTestCase, @unchecked Se
                 "capturedAt": capturedAt,
                 "originalMessage": """
                 [Web발신]
-                MG+ 하나\(maskedIdentifier)승인 홍*동 \(amount)원 일시불 \(monthDay) \(time) \(merchant) 누적987,654원
+                MG+ 하나\(maskedIdentifier)\(kind) 홍*동 \(amount)원 일시불 \(monthDay) \(time) \(merchant) 누적987,654원
                 """
             ]]
         ]

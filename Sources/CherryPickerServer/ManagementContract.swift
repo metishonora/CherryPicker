@@ -300,6 +300,32 @@ public struct TransactionUpdateRequest: Codable, Equatable, Sendable {
     }
 }
 
+public struct BulkTransactionReviewItem: Codable, Equatable, Sendable {
+    public let id: UUID
+    public let review: TransactionReviewInput
+    public let aggregationExcluded: Bool
+
+    public init(id: UUID, review: TransactionReviewInput, aggregationExcluded: Bool) {
+        self.id = id
+        self.review = review
+        self.aggregationExcluded = aggregationExcluded
+    }
+
+    var request: TransactionUpdateRequest {
+        TransactionUpdateRequest(review: review, aggregationExcluded: aggregationExcluded)
+    }
+}
+
+/// Reviews several transactions in one atomic write. Each item carries its
+/// own benefit IDs because benefits belong to the transaction's card.
+public struct BulkTransactionReviewRequest: Codable, Equatable, Sendable {
+    public let items: [BulkTransactionReviewItem]
+
+    public init(items: [BulkTransactionReviewItem]) {
+        self.items = items
+    }
+}
+
 public struct PerformanceProgress: Codable, Equatable, Sendable {
     public let currentAmount: Int
     public let targetAmount: Int
