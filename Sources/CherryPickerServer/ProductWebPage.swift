@@ -265,10 +265,20 @@ enum ProductWebPage {
             .is-selecting .cp-row-badges { grid-column: 2 / -1; }
             .is-selecting .cp-row[aria-pressed="true"] { background: var(--cp-accent-soft); }
             .is-selecting .cp-row:disabled { opacity: .45; cursor: default; }
-            .cp-bulk-panel {
-              position: sticky; bottom: 0; z-index: 5; margin-top: 18px; padding: 20px; border-radius: 20px 20px 0 0;
-              background: var(--cp-surface); box-shadow: 0 -10px 30px color-mix(in srgb, #000 14%, transparent);
+            .cp-bulk-bar {
+              position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+              margin-top: 18px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-radius: 18px 18px 0 0;
+              background: var(--cp-surface); box-shadow: 0 -8px 24px color-mix(in srgb, #000 12%, transparent); font-weight: 700;
             }
+            .cp-bulk-backdrop { position: fixed; inset: 0; z-index: 20; background: color-mix(in srgb, #000 40%, transparent); }
+            .cp-bulk-panel {
+              position: fixed; left: 50%; bottom: 0; z-index: 21; width: min(100%, 640px); transform: translateX(-50%);
+              max-height: 80vh; max-height: 80dvh; overflow-y: auto; overscroll-behavior: contain;
+              padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); border-radius: 20px 20px 0 0;
+              background: var(--cp-surface); box-shadow: 0 -10px 30px color-mix(in srgb, #000 18%, transparent);
+            }
+            .cp-bulk-panel .cp-check-row { padding: 12px 14px; }
+            .cp-bulk-panel .cp-actions { position: sticky; bottom: calc(-20px - env(safe-area-inset-bottom)); padding: 12px 0 calc(20px + env(safe-area-inset-bottom)); margin-bottom: calc(-20px - env(safe-area-inset-bottom)); background: var(--cp-surface); }
             .cp-bulk-panel h2 { margin: 0 0 14px; font-size: 18px; }
             .cp-bulk-panel h3 { margin: 18px 0 10px; color: var(--cp-subtle); font-size: 14px; }
             .cp-bulk-panel .cp-actions { margin-top: 18px; }
@@ -316,14 +326,19 @@ enum ProductWebPage {
                 </div>
                 <div id="inbox-list" class="cp-list"></div>
                 <p id="inbox-empty" class="cp-empty" hidden>확인할 거래가 없습니다.</p>
-                <section id="bulk-panel" class="cp-bulk-panel" aria-labelledby="bulk-title" hidden>
+                <div id="bulk-bar" class="cp-bulk-bar" hidden>
+                  <span id="bulk-bar-count">0건 선택</span>
+                  <button id="bulk-open" class="cp-button cp-button-primary cp-button-compact" type="button">실적·혜택 설정</button>
+                </div>
+                <div id="bulk-backdrop" class="cp-bulk-backdrop" hidden></div>
+                <section id="bulk-panel" class="cp-bulk-panel" role="dialog" aria-modal="true" aria-labelledby="bulk-title" hidden>
                   <h2 id="bulk-title">선택한 거래 한 번에 확인</h2>
                   <div class="cp-choice-grid" role="radiogroup" aria-label="실적 인정 여부">
                     <div class="cp-choice"><input id="bulk-performance-included" name="bulk-performance" type="radio" value="included"><label for="bulk-performance-included">실적 인정</label></div>
                     <div class="cp-choice"><input id="bulk-performance-excluded" name="bulk-performance" type="radio" value="excluded"><label for="bulk-performance-excluded">실적 제외</label></div>
                   </div>
                   <div id="bulk-benefits"></div>
-                  <div class="cp-actions"><button id="bulk-cancel" class="cp-button" type="button">취소</button><button id="bulk-save" class="cp-button cp-button-primary" type="button" disabled>저장하고 확인</button></div>
+                  <div class="cp-actions"><button id="bulk-cancel" class="cp-button" type="button">닫기</button><button id="bulk-save" class="cp-button cp-button-primary" type="button" disabled>저장하고 확인</button></div>
                 </section>
               </section>
 
@@ -527,7 +542,7 @@ enum ProductWebPage {
               };
               const currentMonth = monthKeyForDate(new Date());
               const earliestMonth = '2026-08';
-              const state = { cards: [], selectedCardId: null, view: 'inbox', filter: 'all', month: currentMonth, activeTransaction: null, dashboard: null, returnView: 'inbox', inboxTransactions: [], selecting: false, selectedIds: new Set(), settingsPreviousOffsets: null, settingsCurrentOffsets: null };
+              const state = { cards: [], selectedCardId: null, view: 'inbox', filter: 'all', month: currentMonth, activeTransaction: null, dashboard: null, returnView: 'inbox', inboxTransactions: [], selecting: false, selectedIds: new Set(), bulkSheetOpen: false, settingsPreviousOffsets: null, settingsCurrentOffsets: null };
               let reviewPreviewSequence = 0;
               let visiblePickerYear = Number(currentMonth.slice(0, 4));
               const card = () => state.cards.find(value => value.id === state.selectedCardId);
@@ -775,8 +790,16 @@ enum ProductWebPage {
                 renderBulkPanel();
               }
 
+              function setBulkSheetOpen(open) {
+                state.bulkSheetOpen = open;
+                renderBulkPanel();
+                if (open) { $('#bulk-panel').scrollTop = 0; $('#bulk-performance-included').focus({ preventScroll: true }); }
+                else if (!$('#bulk-bar').hidden) $('#bulk-open').focus({ preventScroll: true });
+              }
+
               function setInboxSelecting(selecting) {
                 state.selecting = selecting;
+                state.bulkSheetOpen = false;
                 state.selectedIds = new Set();
                 $$('input[name="bulk-performance"]').forEach(input => { input.checked = false; });
                 renderInbox();
@@ -793,8 +816,14 @@ enum ProductWebPage {
                 const selectAll = $('#inbox-select-all');
                 selectAll.checked = selectable.length > 0 && selected.length === selectable.length;
                 selectAll.indeterminate = selected.length > 0 && selected.length < selectable.length;
+                const hasSelection = state.selecting && selected.length > 0;
+                if (!hasSelection) state.bulkSheetOpen = false;
+                $('#bulk-bar').hidden = !hasSelection || state.bulkSheetOpen;
+                $('#bulk-bar-count').textContent = `${selected.length}건 선택`;
                 const panel = $('#bulk-panel');
-                panel.hidden = !state.selecting || selected.length === 0;
+                panel.hidden = !state.bulkSheetOpen;
+                $('#bulk-backdrop').hidden = !state.bulkSheetOpen;
+                document.body.style.overflow = state.bulkSheetOpen ? 'hidden' : '';
                 if (panel.hidden) return;
                 $('#bulk-title').textContent = `선택한 ${selected.length}건 한 번에 확인`;
                 const checkedBenefits = new Set($$('#bulk-benefits input:checked').map(input => input.value));
@@ -848,7 +877,7 @@ enum ProductWebPage {
                 }
                 clearError();
                 toast(`${items.length}건을 확인했습니다`);
-                state.selecting = false; state.selectedIds = new Set();
+                state.selecting = false; state.selectedIds = new Set(); state.bulkSheetOpen = false;
                 $$('input[name="bulk-performance"]').forEach(input => { input.checked = false; });
                 await loadInbox();
               }
@@ -1214,7 +1243,12 @@ enum ProductWebPage {
                 renderInbox();
               });
               $$('input[name="bulk-performance"]').forEach(input => input.addEventListener('change', updateBulkSaveState));
-              $('#bulk-cancel').addEventListener('click', () => setInboxSelecting(false));
+              $('#bulk-open').addEventListener('click', () => setBulkSheetOpen(true));
+              $('#bulk-cancel').addEventListener('click', () => setBulkSheetOpen(false));
+              $('#bulk-backdrop').addEventListener('click', () => setBulkSheetOpen(false));
+              document.addEventListener('keydown', event => {
+                if (event.key === 'Escape' && state.bulkSheetOpen) setBulkSheetOpen(false);
+              });
               $('#bulk-save').addEventListener('click', () => saveBulkReview().catch(showError));
               $('#aggregation-excluded').addEventListener('change', updateReviewPreview);
               $$('input[name="performance"]').forEach(input => input.addEventListener('change', updateReviewPreview));
